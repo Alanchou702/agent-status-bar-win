@@ -1,0 +1,25 @@
+appId: com.zhuhuibin.AgentStatusBar
+productName: AgentStatusBar
+directories:
+  output: release
+files:
+  - out/**/*
+  - package.json
+  - resources/**/*
+extraResources:
+  - from: resources
+    to: resources
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+    - target: portable
+      arch:
+        - x64
+  icon: resources/tray-running.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: false
+  createStartMenuShortcut: true

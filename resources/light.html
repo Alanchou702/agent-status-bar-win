@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <style>
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      background-color: transparent;
+      overflow: hidden;
+      -webkit-app-region: drag;
+      user-select: none;
+      cursor: move;
+    }
+    #dot {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: #969696;
+      color: #969696;
+      box-shadow: 0 0 8px 0 currentColor;
+      transition: background-color 0.3s ease;
+    }
+    .blink {
+      animation: blink 0.55s ease-in-out infinite;
+    }
+    @keyframes blink {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.2;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="dot"></div>
+  <script>
+    const { ipcRenderer } = require('electron');
+    const dot = document.getElementById('dot');
+    ipcRenderer.on('light-state', (_e, s) => {
+      dot.style.background = s.color;
+      dot.style.color = s.color;
+      dot.classList.toggle('blink', !!s.blink);
+    });
+  </script>
+</body>
+</html>

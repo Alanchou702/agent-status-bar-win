@@ -1,0 +1,24 @@
+{
+  "name": "agent-status-bar-win",
+  "version": "0.1.17",
+  "description": "Windows system tray monitor for Claude Code and Codex agents",
+  "main": "out/main/main.js",
+  "author": "zhuhuibin",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && electron .",
+    "scan:once": "tsc && node out/cli/scanOnce.js",
+    "dist": "npm run build && electron-builder",
+    "dist:dir": "npm run build && electron-builder --dir"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "electron": "^43.3.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "koffi": "^3.1.4"
+  }
+}
