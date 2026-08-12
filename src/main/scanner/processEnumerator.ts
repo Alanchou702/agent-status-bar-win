@@ -58,5 +58,9 @@ export function isClaudeProcess(p: ProcInfo): boolean {
 }
 
 export function isCodexProcess(p: ProcInfo): boolean {
-  return p.pid !== process.pid && p.name.toLowerCase() === 'codex.exe';
+  if (p.pid === process.pid) return false;
+  const name = p.name.toLowerCase();
+  const cmd = p.cmd.toLowerCase();
+  if (name === 'codex.exe') return true;
+  return name.includes('node') && /(?:^|[\\/ ])codex(?:\.js|\.cmd|$)/i.test(cmd);
 }

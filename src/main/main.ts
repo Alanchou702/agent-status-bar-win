@@ -29,6 +29,7 @@ let startAtLogin = false;
 let lightEnabled = false;
 let simulated: AgentSummary | null = null;
 let simulateTimer: ReturnType<typeof setTimeout> | null = null;
+let scanInFlight = false;
 
 /** Push the current summary into the light + tray visuals. */
 function applyVisuals(s: AgentSummary): void {
@@ -161,6 +162,8 @@ function handleNotifications(snap: AgentSnapshot): void {
 }
 
 async function runScan(forceCredits: boolean): Promise<void> {
+  if (scanInFlight) return;
+  scanInFlight = true;
   try {
     const config = loadConfig();
     const result = await scanAll(config);
@@ -188,6 +191,8 @@ async function runScan(forceCredits: boolean): Promise<void> {
     if (!simulated) applyVisuals(summary);
   } catch (e) {
     console.error('[scan]', e);
+  } finally {
+    scanInFlight = false;
   }
 }
 

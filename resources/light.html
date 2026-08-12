@@ -1,52 +1,238 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <style>
-    html,
-    body {
+    :root { --light-color: #969696; --face-scale: 1; }
+    * { box-sizing: border-box; }
+    html, body {
       margin: 0;
-      padding: 0;
-      background: transparent;
-      background-color: transparent;
+      width: 110px;
+      height: 96px;
       overflow: hidden;
+      background: transparent;
       -webkit-app-region: drag;
       user-select: none;
       cursor: move;
     }
-    #dot {
-      width: 36px;
-      height: 36px;
+    #character {
+      position: relative;
+      width: 100px;
+      height: 92px;
+      margin: 2px 5px;
+      transform-origin: 50% 75%;
+      filter: drop-shadow(0 6px 5px rgba(0, 0, 0, .28));
+    }
+    #glow {
+      position: absolute;
+      z-index: 0;
+      left: 13px;
+      top: 7px;
+      width: 74px;
+      height: 74px;
       border-radius: 50%;
-      background: #969696;
-      color: #969696;
-      box-shadow: 0 0 8px 0 currentColor;
-      transition: background-color 0.3s ease;
+      background: var(--light-color);
+      opacity: .28;
+      filter: blur(11px);
+      transform: scale(1.04);
     }
-    .blink {
-      animation: blink 0.55s ease-in-out infinite;
+    #head {
+      position: absolute;
+      z-index: 1;
+      left: 14px;
+      top: 5px;
+      width: 72px;
+      height: 72px;
+      border: 2px solid rgba(255, 255, 255, .72);
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 30% 20%, rgba(255,255,255,.95) 0 6%, transparent 18%),
+        radial-gradient(circle at 35% 27%, rgba(255,255,255,.42), transparent 28%),
+        linear-gradient(145deg, rgba(255,255,255,.45), transparent 32%),
+        var(--light-color);
+      box-shadow:
+        inset -9px -11px 13px rgba(0, 0, 0, .25),
+        inset 8px 7px 11px rgba(255, 255, 255, .33),
+        0 0 16px 4px color-mix(in srgb, var(--light-color) 72%, transparent);
+      transition: background-color .22s ease, box-shadow .22s ease;
     }
-    @keyframes blink {
-      0%,
-      100% {
-        opacity: 1;
-      }
-      50% {
-        opacity: 0.2;
-      }
+    #head::before {
+      content: "";
+      position: absolute;
+      left: 10px;
+      top: -4px;
+      width: 47px;
+      height: 16px;
+      border-radius: 50%;
+      border-top: 3px solid rgba(255,255,255,.75);
+      opacity: .72;
+      transform: rotate(-8deg);
+    }
+    .eye {
+      position: absolute;
+      top: 26px;
+      width: 15px;
+      height: 8px;
+      border-top: 3px solid #38281f;
+      border-radius: 50%;
+      transition: transform .15s ease;
+    }
+    .eye::after {
+      content: "";
+      position: absolute;
+      left: 5px;
+      top: -2px;
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: #231811;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.45);
+    }
+    #eye-left { left: 15px; transform: rotate(6deg); }
+    #eye-right { right: 15px; transform: rotate(-6deg); }
+    .brow {
+      position: absolute;
+      top: 20px;
+      width: 18px;
+      height: 4px;
+      border-radius: 50%;
+      background: #4b3529;
+      opacity: .9;
+    }
+    #brow-left { left: 13px; transform: rotate(8deg); }
+    #brow-right { right: 13px; transform: rotate(-8deg); }
+    #nose {
+      position: absolute;
+      left: 32px;
+      top: 31px;
+      width: 9px;
+      height: 13px;
+      border-right: 2px solid rgba(65, 35, 22, .75);
+      border-bottom: 2px solid rgba(65, 35, 22, .75);
+      border-radius: 0 0 9px 0;
+      transform: rotate(12deg);
+    }
+    #moustache {
+      position: absolute;
+      left: 21px;
+      top: 42px;
+      width: 29px;
+      height: 12px;
+      background: #493126;
+      border-radius: 80% 20% 75% 25%;
+      transform: rotate(8deg);
+      box-shadow: 14px 0 0 #493126;
+    }
+    #mouth {
+      position: absolute;
+      left: 29px;
+      top: 57px;
+      width: 17px;
+      height: 5px;
+      border-bottom: 2px solid rgba(60, 27, 19, .85);
+      border-radius: 50%;
+    }
+    .cheek {
+      position: absolute;
+      top: 46px;
+      width: 9px;
+      height: 5px;
+      border-radius: 50%;
+      background: rgba(255, 142, 133, .6);
+      filter: blur(1px);
+    }
+    #cheek-left { left: 8px; }
+    #cheek-right { right: 8px; }
+    .ear {
+      position: absolute;
+      z-index: 0;
+      top: 31px;
+      width: 14px;
+      height: 22px;
+      border: 2px solid rgba(255,255,255,.7);
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--light-color) 75%, #ffb18c);
+    }
+    #ear-left { left: 9px; }
+    #ear-right { right: 9px; }
+    #body {
+      position: absolute;
+      z-index: 2;
+      left: 38px;
+      top: 71px;
+      width: 25px;
+      height: 15px;
+      border-radius: 50% 50% 8px 8px;
+      background: linear-gradient(#6d4c41, #34251f);
+      box-shadow: inset 0 3px 3px rgba(255,255,255,.25);
+    }
+    .blink .eye { transform: scaleY(.15); }
+    .blink #eye-left { transform: rotate(6deg) scaleY(.15); }
+    .blink #eye-right { transform: rotate(-6deg) scaleY(.15); }
+    .active #character { animation: bob 1.15s ease-in-out infinite; }
+    .active #glow { animation: glow 1.15s ease-in-out infinite; }
+    .active #head { animation: shine 1.15s ease-in-out infinite; }
+    .approval #brow-left { transform: rotate(-18deg) translateY(2px); }
+    .approval #brow-right { transform: rotate(18deg) translateY(2px); }
+    .approval #mouth { height: 9px; border-bottom: 0; border-top: 2px solid rgba(60,27,19,.85); }
+    .running #eye-left { animation: look 3.2s ease-in-out infinite; }
+    .running #eye-right { animation: look 3.2s ease-in-out infinite .08s; }
+    .funny #head { animation: funny-face .65s ease-in-out 1; }
+    .funny #mouth { transform: rotate(-14deg) scaleX(1.25); }
+    .funny #brow-left { transform: rotate(28deg) translateY(-3px); }
+    .funny #brow-right { transform: rotate(-25deg) translateY(3px); }
+    @keyframes bob { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-3px) rotate(1deg); } }
+    @keyframes glow { 0%,100% { opacity: .22; transform: scale(1); } 50% { opacity: .45; transform: scale(1.15); } }
+    @keyframes shine { 0%,100% { filter: brightness(.95); } 50% { filter: brightness(1.18); } }
+    @keyframes look { 0%,65%,100% { transform: translateX(0); } 75% { transform: translateX(3px); } 85% { transform: translateX(-2px); } }
+    @keyframes funny-face { 0%,100% { transform: rotate(0) scale(1); } 35% { transform: rotate(-7deg) scale(1.07, .94); } 70% { transform: rotate(6deg) scale(.94, 1.06); } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
     }
   </style>
 </head>
 <body>
-  <div id="dot"></div>
+  <div id="character">
+    <div id="glow"></div>
+    <div class="ear" id="ear-left"></div><div class="ear" id="ear-right"></div>
+    <div id="head">
+      <div class="brow" id="brow-left"></div><div class="brow" id="brow-right"></div>
+      <div class="eye" id="eye-left"></div><div class="eye" id="eye-right"></div>
+      <div id="nose"></div><div id="moustache"></div><div id="mouth"></div>
+      <div class="cheek" id="cheek-left"></div><div class="cheek" id="cheek-right"></div>
+    </div>
+    <div id="body"></div>
+  </div>
   <script>
     const { ipcRenderer } = require('electron');
-    const dot = document.getElementById('dot');
-    ipcRenderer.on('light-state', (_e, s) => {
-      dot.style.background = s.color;
-      dot.style.color = s.color;
-      dot.classList.toggle('blink', !!s.blink);
-    });
+    const character = document.getElementById('character');
+    const root = document.documentElement;
+    let lastColor = '#969696';
+    let blinkTimer;
+    let funnyTimer;
+    function setMode(state) {
+      const color = state.color || '#969696';
+      lastColor = color;
+      root.style.setProperty('--light-color', color);
+      character.className = '';
+      if (state.blink) character.classList.add('active', 'blink');
+      if (/ff4d4f|ff0000/i.test(color)) character.classList.add('approval');
+      else if (/3cc85a|00ff00/i.test(color)) character.classList.add('busy');
+      else if (/4682ff|0000ff/i.test(color)) character.classList.add('running');
+    }
+    function blink() {
+      character.classList.add('blink');
+      clearTimeout(blinkTimer);
+      blinkTimer = setTimeout(() => character.classList.remove('blink'), 180);
+    }
+    function funnyFace() {
+      character.classList.add('funny');
+      setTimeout(() => character.classList.remove('funny'), 700);
+      funnyTimer = setTimeout(funnyFace, 7000 + Math.random() * 9000);
+    }
+    ipcRenderer.on('light-state', (_event, state) => setMode(state));
+    setTimeout(funnyFace, 4500);
+    setInterval(() => { if (!character.classList.contains('blink')) blink(); }, 4200 + Math.random() * 3500);
   </script>
 </body>
 </html>

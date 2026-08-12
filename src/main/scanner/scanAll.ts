@@ -3,6 +3,7 @@ import type { AppConfig } from '../config.js';
 import { enumerateProcesses, isClaudeProcess, isCodexProcess } from './processEnumerator.js';
 import { deriveClaudeState, readClaudeSessions } from './claudeScanner.js';
 import { deriveCodexState, queryCodexActivity, queryCodexThread } from './codexScanner.js';
+import { resolveCodexDb } from './codexDbPath.js';
 
 export interface ScanResult {
   summary: AgentSummary;
@@ -33,14 +34,17 @@ export async function scanAll(config: AppConfig): Promise<ScanResult> {
     scannedAt: now,
   };
 
-  const codex = queryCodexActivity(config.paths.codexLogsDb, config.codexThreadLookupWindowSec);
+  const codex = queryCodexActivity(
+    resolveCodexDb(config.paths.codexLogsDb, 'logs'),
+    config.codexThreadLookupWindowSec
+  );
   const codexState = deriveCodexState(
     codex?.activity ?? null,
     codexPids.size > 0,
     now,
     config.codexTurnActivityFreshnessMs
   );
-  const codexThread = queryCodexThread(config.paths.codexStateDb);
+  const codexThread = queryCodexThread(resolveCodexDb(config.paths.codexStateDb, 'state'));
   const codexSnap: AgentSnapshot = {
     client: 'codex',
     state: codexState.state,
