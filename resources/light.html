@@ -3,255 +3,229 @@
 <head>
   <meta charset="utf-8" />
   <style>
-    :root { --light-color: #969696; --face-scale: 1; }
+    :root { --status-color: #969696; }
     * { box-sizing: border-box; }
     html, body {
       margin: 0;
-      width: 110px;
-      height: 96px;
+      width: 120px;
+      height: 110px;
       overflow: hidden;
       background: transparent;
       -webkit-app-region: drag;
       user-select: none;
       cursor: move;
     }
-    #character {
+    #avatar {
       position: relative;
-      width: 100px;
-      height: 92px;
-      margin: 2px 5px;
-      transform-origin: 50% 75%;
-      filter: drop-shadow(0 6px 5px rgba(0, 0, 0, .28));
+      width: 112px;
+      height: 106px;
+      transform-origin: 50% 80%;
+      filter: drop-shadow(0 7px 5px rgba(0,0,0,.32));
     }
-    #glow {
+    #aura {
       position: absolute;
       z-index: 0;
-      left: 13px;
-      top: 7px;
-      width: 74px;
-      height: 74px;
+      left: 18px;
+      top: 9px;
+      width: 76px;
+      height: 76px;
       border-radius: 50%;
-      background: var(--light-color);
-      opacity: .28;
-      filter: blur(11px);
-      transform: scale(1.04);
+      background: var(--status-color);
+      opacity: .35;
+      filter: blur(13px);
+      transition: background .2s ease;
+    }
+    #body {
+      position: absolute;
+      z-index: 1;
+      left: 31px;
+      top: 70px;
+      width: 53px;
+      height: 34px;
+      border: 2px solid rgba(255,255,255,.2);
+      border-radius: 22px 22px 12px 12px;
+      background: linear-gradient(145deg, #32343b, #111217);
+      box-shadow: inset 7px 5px 8px rgba(255,255,255,.11), inset -7px -6px 10px rgba(0,0,0,.4);
+    }
+    #collar {
+      position: absolute;
+      left: 19px;
+      top: -1px;
+      width: 15px;
+      height: 21px;
+      border-radius: 3px 3px 10px 10px;
+      background: #f19a31;
+      transform: rotate(22deg);
+    }
+    #terminal-mark {
+      position: absolute;
+      right: 9px;
+      top: 13px;
+      color: #ffad45;
+      font: 700 10px/1 monospace;
+      opacity: .9;
     }
     #head {
       position: absolute;
-      z-index: 1;
-      left: 14px;
-      top: 5px;
-      width: 72px;
-      height: 72px;
-      border: 2px solid rgba(255, 255, 255, .72);
-      border-radius: 50%;
-      background:
-        radial-gradient(circle at 30% 20%, rgba(255,255,255,.95) 0 6%, transparent 18%),
-        radial-gradient(circle at 35% 27%, rgba(255,255,255,.42), transparent 28%),
-        linear-gradient(145deg, rgba(255,255,255,.45), transparent 32%),
-        var(--light-color);
-      box-shadow:
-        inset -9px -11px 13px rgba(0, 0, 0, .25),
-        inset 8px 7px 11px rgba(255, 255, 255, .33),
-        0 0 16px 4px color-mix(in srgb, var(--light-color) 72%, transparent);
-      transition: background-color .22s ease, box-shadow .22s ease;
+      z-index: 2;
+      left: 23px;
+      top: 17px;
+      width: 69px;
+      height: 63px;
+      border: 2px solid rgba(255,255,255,.68);
+      border-radius: 45% 48% 48% 48%;
+      background: linear-gradient(145deg, #fff5dc 0%, #f6d09b 62%, #c98a57 100%);
+      box-shadow: inset 7px 5px 8px rgba(255,255,255,.52), inset -8px -7px 10px rgba(92,48,28,.22);
     }
-    #head::before {
+    #hair {
+      position: absolute;
+      z-index: 3;
+      left: 17px;
+      top: 6px;
+      width: 78px;
+      height: 37px;
+      background: #ed8c2f;
+      clip-path: polygon(2% 74%, 12% 39%, 20% 47%, 23% 5%, 35% 29%, 48% 0, 56% 28%, 74% 7%, 71% 35%, 95% 22%, 84% 61%, 100% 70%, 73% 79%, 43% 67%, 19% 83%);
+      filter: drop-shadow(1px 2px 1px rgba(80,34,14,.42));
+      transform: rotate(-5deg);
+    }
+    #hair::after {
       content: "";
       position: absolute;
-      left: 10px;
-      top: -4px;
-      width: 47px;
-      height: 16px;
+      left: 18px;
+      top: 8px;
+      width: 37px;
+      height: 7px;
       border-radius: 50%;
-      border-top: 3px solid rgba(255,255,255,.75);
-      opacity: .72;
-      transform: rotate(-8deg);
+      background: rgba(255,218,133,.55);
+      transform: rotate(-12deg);
     }
     .eye {
       position: absolute;
-      top: 26px;
-      width: 15px;
-      height: 8px;
-      border-top: 3px solid #38281f;
+      z-index: 4;
+      top: 36px;
+      width: 18px;
+      height: 15px;
       border-radius: 50%;
+      background: #fff;
+      border: 1px solid rgba(86,45,30,.5);
+      box-shadow: inset 0 -2px 2px rgba(130,70,42,.18);
       transition: transform .15s ease;
     }
     .eye::after {
       content: "";
       position: absolute;
-      left: 5px;
-      top: -2px;
-      width: 4px;
-      height: 4px;
+      left: 6px;
+      top: 4px;
+      width: 6px;
+      height: 7px;
       border-radius: 50%;
-      background: #231811;
-      box-shadow: 0 0 0 1px rgba(255,255,255,.45);
+      background: #272435;
+      box-shadow: 1px 0 0 1px rgba(255,255,255,.6);
     }
-    #eye-left { left: 15px; transform: rotate(6deg); }
-    #eye-right { right: 15px; transform: rotate(-6deg); }
+    #eye-left { left: 13px; }
+    #eye-right { right: 13px; }
     .brow {
       position: absolute;
-      top: 20px;
-      width: 18px;
+      z-index: 4;
+      top: 31px;
+      width: 20px;
       height: 4px;
       border-radius: 50%;
-      background: #4b3529;
-      opacity: .9;
+      background: #7c492b;
     }
-    #brow-left { left: 13px; transform: rotate(8deg); }
-    #brow-right { right: 13px; transform: rotate(-8deg); }
+    #brow-left { left: 11px; transform: rotate(9deg); }
+    #brow-right { right: 11px; transform: rotate(-9deg); }
     #nose {
       position: absolute;
+      z-index: 4;
       left: 32px;
-      top: 31px;
-      width: 9px;
-      height: 13px;
-      border-right: 2px solid rgba(65, 35, 22, .75);
-      border-bottom: 2px solid rgba(65, 35, 22, .75);
-      border-radius: 0 0 9px 0;
+      top: 47px;
+      width: 7px;
+      height: 9px;
+      border-right: 2px solid rgba(123,67,40,.68);
+      border-bottom: 2px solid rgba(123,67,40,.68);
+      border-radius: 0 0 8px 0;
       transform: rotate(12deg);
-    }
-    #moustache {
-      position: absolute;
-      left: 22px;
-      top: 42px;
-      width: 28px;
-      height: 12px;
-      background: transparent;
-    }
-    #moustache::before,
-    #moustache::after {
-      content: "";
-      position: absolute;
-      top: 1px;
-      width: 16px;
-      height: 8px;
-      background: #493126;
-      border-radius: 85% 25% 70% 35%;
-    }
-    #moustache::before {
-      left: 0;
-      transform: rotate(12deg);
-      transform-origin: right center;
-    }
-    #moustache::after {
-      right: 0;
-      transform: rotate(-12deg) scaleX(-1);
-      transform-origin: left center;
     }
     #mouth {
       position: absolute;
-      left: 29px;
-      top: 57px;
-      width: 17px;
-      height: 5px;
-      border-bottom: 2px solid rgba(60, 27, 19, .85);
+      z-index: 4;
+      left: 28px;
+      top: 61px;
+      width: 18px;
+      height: 8px;
+      border-bottom: 2px solid #6f302d;
       border-radius: 50%;
+      transition: all .15s ease;
     }
     .cheek {
       position: absolute;
-      top: 46px;
-      width: 9px;
+      z-index: 4;
+      top: 55px;
+      width: 10px;
       height: 5px;
       border-radius: 50%;
-      background: rgba(255, 142, 133, .6);
+      background: rgba(237,103,102,.45);
       filter: blur(1px);
     }
-    #cheek-left { left: 8px; }
-    #cheek-right { right: 8px; }
-    .ear {
-      position: absolute;
-      z-index: 0;
-      top: 31px;
-      width: 14px;
-      height: 22px;
-      border: 2px solid rgba(255,255,255,.7);
-      border-radius: 50%;
-      background: color-mix(in srgb, var(--light-color) 75%, #ffb18c);
-    }
-    #ear-left { left: 9px; }
-    #ear-right { right: 9px; }
-    #body {
-      position: absolute;
-      z-index: 2;
-      left: 38px;
-      top: 71px;
-      width: 25px;
-      height: 15px;
-      border-radius: 50% 50% 8px 8px;
-      background: linear-gradient(#6d4c41, #34251f);
-      box-shadow: inset 0 3px 3px rgba(255,255,255,.25);
-    }
-    .blink .eye { transform: scaleY(.15); }
-    .blink #eye-left { transform: rotate(6deg) scaleY(.15); }
-    .blink #eye-right { transform: rotate(-6deg) scaleY(.15); }
-    .active #character { animation: bob 1.15s ease-in-out infinite; }
-    .active #glow { animation: glow 1.15s ease-in-out infinite; }
-    .active #head { animation: shine 1.15s ease-in-out infinite; }
-    .approval #brow-left { transform: rotate(-18deg) translateY(2px); }
-    .approval #brow-right { transform: rotate(18deg) translateY(2px); }
-    .approval #mouth { height: 9px; border-bottom: 0; border-top: 2px solid rgba(60,27,19,.85); }
-    .running #eye-left { animation: look 3.2s ease-in-out infinite; }
-    .running #eye-right { animation: look 3.2s ease-in-out infinite .08s; }
-    .funny #head { animation: funny-face .65s ease-in-out 1; }
-    .funny #mouth { transform: rotate(-14deg) scaleX(1.25); }
-    .funny #moustache::before { transform: rotate(28deg); }
-    .funny #moustache::after { transform: rotate(-28deg) scaleX(-1); }
-    .funny #brow-left { transform: rotate(28deg) translateY(-3px); }
+    #cheek-left { left: 5px; }
+    #cheek-right { right: 5px; }
+    .blink .eye { transform: scaleY(.12); }
+    .active #avatar { animation: floaty 1.2s ease-in-out infinite; }
+    .active #aura { animation: aura-pulse 1.2s ease-in-out infinite; }
+    .approval #brow-left { transform: rotate(-18deg) translateY(3px); }
+    .approval #brow-right { transform: rotate(18deg) translateY(3px); }
+    .approval #mouth { height: 9px; border-bottom: 0; border-top: 2px solid #6f302d; }
+    .running .eye::after { animation: glance 3s ease-in-out infinite; }
+    .funny #head { animation: silly .7s ease-in-out 1; }
+    .funny #mouth { transform: rotate(-15deg) scaleX(1.35); border-bottom-width: 3px; }
+    .funny #brow-left { transform: rotate(26deg) translateY(-3px); }
     .funny #brow-right { transform: rotate(-25deg) translateY(3px); }
-    @keyframes bob { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-3px) rotate(1deg); } }
-    @keyframes glow { 0%,100% { opacity: .22; transform: scale(1); } 50% { opacity: .45; transform: scale(1.15); } }
-    @keyframes shine { 0%,100% { filter: brightness(.95); } 50% { filter: brightness(1.18); } }
-    @keyframes look { 0%,65%,100% { transform: translateX(0); } 75% { transform: translateX(3px); } 85% { transform: translateX(-2px); } }
-    @keyframes funny-face { 0%,100% { transform: rotate(0) scale(1); } 35% { transform: rotate(-7deg) scale(1.07, .94); } 70% { transform: rotate(6deg) scale(.94, 1.06); } }
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { animation: none !important; transition: none !important; }
-    }
+    @keyframes floaty { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-4px) rotate(1deg); } }
+    @keyframes aura-pulse { 0%,100% { opacity: .25; transform: scale(1); } 50% { opacity: .55; transform: scale(1.16); } }
+    @keyframes glance { 0%,65%,100% { transform: translateX(0); } 78% { transform: translateX(3px); } 88% { transform: translateX(-2px); } }
+    @keyframes silly { 0%,100% { transform: rotate(0) scale(1); } 35% { transform: rotate(-7deg) scale(1.06,.95); } 70% { transform: rotate(7deg) scale(.95,1.06); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
   </style>
 </head>
 <body>
-  <div id="character">
-    <div id="glow"></div>
-    <div class="ear" id="ear-left"></div><div class="ear" id="ear-right"></div>
+  <div id="avatar">
+    <div id="aura"></div>
+    <div id="body"><div id="collar"></div><span id="terminal-mark">&gt;_</span></div>
+    <div id="hair"></div>
     <div id="head">
       <div class="brow" id="brow-left"></div><div class="brow" id="brow-right"></div>
       <div class="eye" id="eye-left"></div><div class="eye" id="eye-right"></div>
-      <div id="nose"></div><div id="moustache"></div><div id="mouth"></div>
+      <div id="nose"></div><div id="mouth"></div>
       <div class="cheek" id="cheek-left"></div><div class="cheek" id="cheek-right"></div>
     </div>
-    <div id="body"></div>
   </div>
   <script>
     const { ipcRenderer } = require('electron');
-    const character = document.getElementById('character');
+    const avatar = document.getElementById('avatar');
     const root = document.documentElement;
-    let lastColor = '#969696';
     let blinkTimer;
-    let funnyTimer;
-    function setMode(state) {
+    function applyState(state) {
       const color = state.color || '#969696';
-      lastColor = color;
-      root.style.setProperty('--light-color', color);
-      character.className = '';
-      if (state.blink) character.classList.add('active', 'blink');
-      if (/ff4d4f|ff0000/i.test(color)) character.classList.add('approval');
-      else if (/3cc85a|00ff00/i.test(color)) character.classList.add('busy');
-      else if (/4682ff|0000ff/i.test(color)) character.classList.add('running');
+      root.style.setProperty('--status-color', color);
+      avatar.className = '';
+      if (state.blink) avatar.classList.add('active', 'blink');
+      if (/ff4d4f|ff0000/i.test(color)) avatar.classList.add('approval');
+      else if (/3cc85a|00ff00/i.test(color)) avatar.classList.add('busy');
+      else if (/4682ff|0000ff/i.test(color)) avatar.classList.add('running');
     }
     function blink() {
-      character.classList.add('blink');
+      avatar.classList.add('blink');
       clearTimeout(blinkTimer);
-      blinkTimer = setTimeout(() => character.classList.remove('blink'), 180);
+      blinkTimer = setTimeout(() => avatar.classList.remove('blink'), 180);
     }
-    function funnyFace() {
-      character.classList.add('funny');
-      setTimeout(() => character.classList.remove('funny'), 700);
-      funnyTimer = setTimeout(funnyFace, 7000 + Math.random() * 9000);
-    }
-    ipcRenderer.on('light-state', (_event, state) => setMode(state));
-    setTimeout(funnyFace, 4500);
-    setInterval(() => { if (!character.classList.contains('blink')) blink(); }, 4200 + Math.random() * 3500);
+    ipcRenderer.on('light-state', (_event, state) => applyState(state));
+    setInterval(() => { if (!avatar.classList.contains('blink')) blink(); }, 4200 + Math.random() * 3500);
+    setInterval(() => {
+      avatar.classList.add('funny');
+      setTimeout(() => avatar.classList.remove('funny'), 700);
+    }, 9000 + Math.random() * 8000);
   </script>
 </body>
 </html>

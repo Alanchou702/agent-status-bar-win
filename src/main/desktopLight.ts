@@ -22,8 +22,8 @@ export function createLightWindow(
 ): BrowserWindow {
   onMoveSave = save;
   lightWin = new BrowserWindow({
-    width: 110,
-    height: 96,
+    width: 120,
+    height: 110,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
