@@ -7,8 +7,8 @@
     * { box-sizing: border-box; }
     html, body {
       margin: 0;
-      width: 120px;
-      height: 110px;
+      width: 60px;
+      height: 55px;
       overflow: hidden;
       background: transparent;
       -webkit-app-region: drag;
@@ -19,7 +19,8 @@
       position: relative;
       width: 112px;
       height: 106px;
-      transform-origin: 50% 80%;
+      transform: scale(.5);
+      transform-origin: 0 0;
       filter: drop-shadow(0 7px 5px rgba(0,0,0,.32));
     }
     #aura {
@@ -172,7 +173,7 @@
     #cheek-left { left: 5px; }
     #cheek-right { right: 5px; }
     .blink .eye { transform: scaleY(.12); }
-    .active #avatar { animation: floaty 1.2s ease-in-out infinite; }
+    .active #avatar { animation: mini-float 1.2s ease-in-out infinite; }
     .active #aura { animation: aura-pulse 1.2s ease-in-out infinite; }
     .approval #brow-left { transform: rotate(-18deg) translateY(3px); }
     .approval #brow-right { transform: rotate(18deg) translateY(3px); }
@@ -182,7 +183,7 @@
     .funny #mouth { transform: rotate(-15deg) scaleX(1.35); border-bottom-width: 3px; }
     .funny #brow-left { transform: rotate(26deg) translateY(-3px); }
     .funny #brow-right { transform: rotate(-25deg) translateY(3px); }
-    @keyframes floaty { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-4px) rotate(1deg); } }
+    @keyframes mini-float { 0%,100% { transform: scale(.5) translateY(0) rotate(-1deg); } 50% { transform: scale(.5) translateY(-4px) rotate(1deg); } }
     @keyframes aura-pulse { 0%,100% { opacity: .25; transform: scale(1); } 50% { opacity: .55; transform: scale(1.16); } }
     @keyframes glance { 0%,65%,100% { transform: translateX(0); } 78% { transform: translateX(3px); } 88% { transform: translateX(-2px); } }
     @keyframes silly { 0%,100% { transform: rotate(0) scale(1); } 35% { transform: rotate(-7deg) scale(1.06,.95); } 70% { transform: rotate(7deg) scale(.95,1.06); } }

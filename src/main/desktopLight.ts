@@ -11,7 +11,7 @@ let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
 export function defaultLightPosition(): { x: number; y: number } {
   const wa = screen.getPrimaryDisplay().workArea;
-  return { x: wa.x + wa.width - 120, y: wa.y + 12 };
+  return { x: wa.x + wa.width - 70, y: wa.y + 12 };
 }
 
 export function createLightWindow(
@@ -22,8 +22,8 @@ export function createLightWindow(
 ): BrowserWindow {
   onMoveSave = save;
   lightWin = new BrowserWindow({
-    width: 120,
-    height: 110,
+    width: 60,
+    height: 55,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
