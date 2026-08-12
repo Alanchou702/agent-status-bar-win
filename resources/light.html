@@ -114,14 +114,31 @@
     }
     #moustache {
       position: absolute;
-      left: 21px;
+      left: 22px;
       top: 42px;
-      width: 29px;
+      width: 28px;
       height: 12px;
+      background: transparent;
+    }
+    #moustache::before,
+    #moustache::after {
+      content: "";
+      position: absolute;
+      top: 1px;
+      width: 16px;
+      height: 8px;
       background: #493126;
-      border-radius: 80% 20% 75% 25%;
-      transform: rotate(8deg);
-      box-shadow: 14px 0 0 #493126;
+      border-radius: 85% 25% 70% 35%;
+    }
+    #moustache::before {
+      left: 0;
+      transform: rotate(12deg);
+      transform-origin: right center;
+    }
+    #moustache::after {
+      right: 0;
+      transform: rotate(-12deg) scaleX(-1);
+      transform-origin: left center;
     }
     #mouth {
       position: absolute;
@@ -179,6 +196,8 @@
     .running #eye-right { animation: look 3.2s ease-in-out infinite .08s; }
     .funny #head { animation: funny-face .65s ease-in-out 1; }
     .funny #mouth { transform: rotate(-14deg) scaleX(1.25); }
+    .funny #moustache::before { transform: rotate(28deg); }
+    .funny #moustache::after { transform: rotate(-28deg) scaleX(-1); }
     .funny #brow-left { transform: rotate(28deg) translateY(-3px); }
     .funny #brow-right { transform: rotate(-25deg) translateY(3px); }
     @keyframes bob { 0%,100% { transform: translateY(0) rotate(-1deg); } 50% { transform: translateY(-3px) rotate(1deg); } }
