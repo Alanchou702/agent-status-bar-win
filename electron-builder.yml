@@ -17,7 +17,7 @@ win:
     - target: portable
       arch:
         - x64
-  icon: resources/tray-running.ico
+  icon: resources/app-icon.ico
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

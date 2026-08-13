@@ -31,5 +31,17 @@ for filename, active in STATES.items():
             d.ellipse((cx-r, cy-r, cx+r, cy+r), fill=COLORS[key] if key == active else (55, 65, 70, 255), outline=(225, 235, 235, 215), width=max(1, int(scale)))
             if key == active:
                 d.ellipse((cx-int(2*scale), cy-int(3*scale), cx+int(1*scale), cy), fill=(255,255,255,120))
-        images.append(img)
-    images[0].save(OUT / filename, format='ICO', sizes=[(im.width, im.height) for im in images], append_images=images[1:])
+            images.append(img)
+    images[0].save(OUT / filename, format='ICO', sizes=[(16, 16)])
+
+# electron-builder requires an application icon with a real 256px source.
+app = Image.new('RGBA', (256, 256), (0, 0, 0, 0))
+d = ImageDraw.Draw(app)
+d.rounded_rectangle((8, 24, 248, 232), radius=56, fill=(20, 26, 31, 255), outline=(180, 195, 198, 220), width=5)
+for i, key in enumerate(('red', 'yellow', 'green')):
+    cx = 70 + i * 58
+    cy = 128
+    r = 28
+    d.ellipse((cx-r, cy-r, cx+r, cy+r), fill=COLORS[key], outline=(225, 235, 235, 230), width=4)
+    d.ellipse((cx-10, cy-13, cx+3, cy-1), fill=(255, 255, 255, 130))
+app.save(OUT / 'app-icon.ico', format='ICO', sizes=[(256, 256), (128, 128), (64, 64), (32, 32), (16, 16)])
