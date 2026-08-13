@@ -36,7 +36,7 @@ let monitoringPaused = false;
 /** Push the current summary into the light + tray visuals. */
 function applyVisuals(s: AgentSummary): void {
   const light = statusFor(s);
-  updateLight({ color: light.color, blink: light.blink });
+  updateLight(light);
   setTrayBlink(resourcesDir, light.blinkIcon);
   updateTray(resourcesDir, s, startAtLogin, lightEnabled, trayHandlers);
   updatePanel(s, monitoringPaused);
@@ -119,7 +119,7 @@ function toggleLight(): void {
         : defaultLightPosition();
     createLightWindow(path.join(resourcesDir, 'light.html'), pos.x, pos.y, saveLightPosition);
     const light = statusFor(summary);
-    updateLight({ color: light.color, blink: light.blink });
+    updateLight(light);
   } else {
     destroyLight();
   }
