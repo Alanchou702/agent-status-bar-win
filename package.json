@@ -1,6 +1,6 @@
 {
   "name": "agent-status-bar-win",
-  "version": "0.1.17",
+  "version": "0.2.0",
   "description": "Windows system tray monitor for Claude Code and Codex agents",
   "main": "out/main/main.js",
   "author": "zhuhuibin",

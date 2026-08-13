@@ -16,6 +16,7 @@ import { scanClaudeCredits } from './scanner/creditScanner.js';
 import { scanAll } from './scanner/scanAll.js';
 import { statusFor } from './statusLight.js';
 import { createTray, setTrayBlink, updateTray, type SimulatedState, type TrayHandlers } from './tray.js';
+import { createPanelWindow, installPanelIpc, panelPath, showPanel, updatePanel } from './panel.js';
 import { startWatch } from './watch.js';
 
 const CLIENT_NAME: Record<AgentClient, string> = { claude: 'Claude Code', codex: 'Codex' };
@@ -30,6 +31,7 @@ let lightEnabled = false;
 let simulated: AgentSummary | null = null;
 let simulateTimer: ReturnType<typeof setTimeout> | null = null;
 let scanInFlight = false;
+let monitoringPaused = false;
 
 /** Push the current summary into the light + tray visuals. */
 function applyVisuals(s: AgentSummary): void {
@@ -37,6 +39,7 @@ function applyVisuals(s: AgentSummary): void {
   updateLight({ color: light.color, blink: light.blink });
   setTrayBlink(resourcesDir, light.blinkIcon);
   updateTray(resourcesDir, s, startAtLogin, lightEnabled, trayHandlers);
+  updatePanel(s, monitoringPaused);
 }
 
 function buildSimulatedSummary(state: SimulatedState): AgentSummary {
@@ -162,7 +165,7 @@ function handleNotifications(snap: AgentSnapshot): void {
 }
 
 async function runScan(forceCredits: boolean): Promise<void> {
-  if (scanInFlight) return;
+  if (monitoringPaused || scanInFlight) return;
   scanInFlight = true;
   try {
     const config = loadConfig();
@@ -207,6 +210,13 @@ const trayHandlers: TrayHandlers = {
     updateTray(resourcesDir, summary, startAtLogin, lightEnabled, trayHandlers);
   },
   onToggleDesktopLight: () => toggleLight(),
+  onToggleMonitoring: () => {
+    monitoringPaused = !monitoringPaused;
+    if (!monitoringPaused) void runScan(true);
+    applyVisuals(summary);
+  },
+  onOpenSettings: () => showPanel(summary, monitoringPaused),
+  onShowPanel: () => showPanel(summary, monitoringPaused),
   onSimulate: (state) => runSimulation(state),
   onQuit: () => app.quit(),
 };
@@ -236,6 +246,12 @@ if (isWatchMode) {
       lightEnabled = config.light.enabled;
       if (startAtLogin) applyLoginItemSetting(true);
 
+      installPanelIpc();
+      createPanelWindow(panelPath(resourcesDir), {
+        onToggleMonitoring: trayHandlers.onToggleMonitoring,
+        onOpenSettings: trayHandlers.onOpenSettings,
+        onQuit: trayHandlers.onQuit,
+      });
       createTray(resourcesDir, trayHandlers, startAtLogin, lightEnabled);
 
       if (lightEnabled) {
