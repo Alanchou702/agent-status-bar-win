@@ -18,6 +18,10 @@ interface PsRow {
 }
 
 export async function enumerateProcesses(timeoutMs = 15_000): Promise<ProcInfo[]> {
+  // The production scanner targets Windows; returning no processes elsewhere
+  // keeps the CLI and build checks usable on macOS/Linux development machines.
+  if (process.platform !== 'win32') return [];
+
   const { stdout } = await execFileAsync(
     'powershell.exe',
     ['-NoProfile', '-NonInteractive', '-Command', PS_SCRIPT],

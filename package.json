@@ -7,6 +7,7 @@
   "license": "MIT",
   "scripts": {
     "build": "tsc",
+    "typecheck": "tsc --noEmit",
     "start": "npm run build && electron .",
     "scan:once": "tsc && node out/cli/scanOnce.js",
     "dist": "npm run build && electron-builder",

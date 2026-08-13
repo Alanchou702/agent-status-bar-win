@@ -42,7 +42,7 @@ npm start
 npm run dist
 ```
 
-打包后的安装程序位于 `release/` 目录。
+打包后的安装程序位于 `release/` 目录。Windows 用户可以下载 GitHub Releases 中的 NSIS 安装器（`AgentStatusBar Setup *.exe`），也可以直接运行便携版 EXE。
 
 ## 系统要求
 
@@ -79,7 +79,7 @@ npm run dist
 
 ```bash
 # 类型检查
-npx tsc --noEmit
+npm run typecheck
 
 # 开发模式运行
 npm start
