@@ -60,36 +60,73 @@ function readTail(file: string, bytes = 65536): string {
   }
 }
 
+export interface ClaudeTranscriptInfo {
+  /** Last transcript line is an assistant message with an unanswered tool_use. */
+  waitingApproval: boolean;
+  /** Name of the most recent assistant tool_use (e.g. 'Delete'). */
+  lastToolName: string | null;
+  /** A turn_duration system event appeared within doneFreshnessMs of now. */
+  justCompletedTurn: boolean;
+  completedTurn: boolean;
+  lastActivityAt: number;
+}
+
 /**
- * True when the session's transcript ends with an assistant tool_use that has
- * not yet been answered with a tool_result — i.e. Claude Code is waiting for
- * the user to approve a tool call or answer a question.
+ * Read the transcript tail once and derive the flags the status light needs:
+ * pending approval, the name of the last tool call (for the deleting state),
+ * and whether the last turn just finished (for the task-complete marquee).
  */
-export function isWaitingForApproval(projectsDir: string, session: ClaudeSessionInfo): boolean {
-  if (!session.sessionId) return false;
+export function analyzeClaudeTranscript(
+  projectsDir: string,
+  session: ClaudeSessionInfo,
+  doneFreshnessMs: number,
+  now: number
+): ClaudeTranscriptInfo {
+  const info: ClaudeTranscriptInfo = { waitingApproval: false, lastToolName: null, justCompletedTurn: false, completedTurn: false, lastActivityAt: 0 };
+  if (!session.sessionId) return info;
   const file = findTranscript(projectsDir, session.sessionId);
-  if (!file) return false;
+  if (!file) return info;
   let tail: string;
   try {
     tail = readTail(file);
+    info.lastActivityAt = fs.statSync(file).mtimeMs;
   } catch {
-    return false;
+    return info;
   }
   const lines = tail.split('\n').filter((l) => l.trim().length > 0);
-  if (!lines.length) return false;
-  const last = lines[lines.length - 1];
-  try {
-    const o = JSON.parse(last);
-    if (o?.type !== 'assistant') return false;
-    const content = o?.message?.content;
-    if (!Array.isArray(content)) return false;
-    return content.some((b: unknown) => {
-      const block = b as { type?: string } | null;
-      return !!block && block.type === 'tool_use';
-    });
-  } catch {
-    return false;
+  if (!lines.length) return info;
+
+  const resolved = new Set<string>();
+  let sawCurrentActivity = false;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    let o: Record<string, any>;
+    try { o = JSON.parse(lines[i]); } catch { continue; }
+    if (!o || typeof o !== 'object') continue;
+    const content: Record<string, any>[] = Array.isArray(o.message?.content) ? o.message.content : [];
+    if (o.type === 'system' && o.subtype === 'turn_duration') {
+      const ts = Date.parse(String(o.timestamp ?? ''));
+      info.completedTurn = !sawCurrentActivity;
+      info.justCompletedTurn = !sawCurrentActivity && Number.isFinite(ts) && now >= ts && now - ts < doneFreshnessMs;
+      break;
+    }
+    if (o.type === 'user') {
+      const results = content.filter(b => b?.type === 'tool_result');
+      if (!results.length) break;
+      for (const block of results) if (typeof block.tool_use_id === 'string') resolved.add(block.tool_use_id);
+      sawCurrentActivity = true;
+    }
+    if (o.type === 'assistant') {
+      sawCurrentActivity = true;
+      const pending = content.find(b => b?.type === 'tool_use' && typeof b.id === 'string' && !resolved.has(b.id));
+      if (pending) {
+        info.lastToolName = typeof pending.name === 'string' ? pending.name : null;
+        // A pending tool can be executing or auto-approved; it is not evidence of a permission prompt.
+        info.waitingApproval = /^(waiting_for_approval|permission_required)$/.test(session.status ?? '');
+        break;
+      }
+    }
   }
+  return info;
 }
 
 export function deriveClaudeState(
@@ -97,19 +134,32 @@ export function deriveClaudeState(
   claudePids: Set<number>,
   now: number,
   busyFreshnessMs: number,
-  projectsDir: string
-): { state: 'busy' | 'running' | 'idle' | 'unknown'; detail: string; session?: ClaudeSessionInfo } {
+  projectsDir: string,
+  doneFreshnessMs: number
+): {
+  state: 'busy' | 'running' | 'idle' | 'unknown';
+  detail: string;
+  session?: ClaudeSessionInfo;
+  deleting?: boolean;
+  done?: boolean;
+} {
   const live = sessions.filter((s) => claudePids.has(s.pid));
   if (live.length === 0) {
     if (claudePids.size > 0) return { state: 'running', detail: 'running' };
     return { state: 'idle', detail: 'not running' };
   }
-  const s = live[0];
-  if (isWaitingForApproval(projectsDir, s)) {
-    return { state: 'busy', detail: 'waiting for approval', session: s };
-  }
-  if (s.status === 'busy') return { state: 'busy', detail: 'working', session: s };
-  if (s.status === 'idle') return { state: 'running', detail: 'idle', session: s };
-  if (now - s.updatedAt < busyFreshnessMs) return { state: 'busy', detail: 'working', session: s };
-  return { state: 'running', detail: 'active', session: s };
+  const candidates = live.map(s => {
+    const info = analyzeClaudeTranscript(projectsDir, s, doneFreshnessMs, now);
+    const flags = { deleting: info.lastToolName === 'Delete', done: info.justCompletedTurn };
+    if (info.waitingApproval || /^(waiting_for_approval|permission_required)$/.test(s.status ?? ''))
+      return { state: 'busy' as const, detail: 'waiting for approval', session: s, ...flags, rank: 5 };
+    if (info.lastToolName === 'AskUserQuestion')
+      return { state: 'busy' as const, detail: 'waiting for your input', session: s, ...flags, rank: 4 };
+    if (info.completedTurn) return { state: 'running' as const, detail: info.justCompletedTurn ? 'task complete' : 'idle', session: s, ...flags, rank: info.justCompletedTurn ? 2 : 1 };
+    if (s.status === 'busy' || (s.status !== 'idle' && now - Math.max(s.updatedAt, info.lastActivityAt) < busyFreshnessMs))
+      return { state: 'busy' as const, detail: 'working', session: s, ...flags, rank: 3 };
+    return { state: 'running' as const, detail: 'idle', session: s, rank: 1 };
+  });
+  candidates.sort((a, b) => b.rank - a.rank || b.session.updatedAt - a.session.updatedAt);
+  return candidates[0];
 }

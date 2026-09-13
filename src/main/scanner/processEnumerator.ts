@@ -5,8 +5,9 @@ import type { ProcInfo } from '../../shared/types.js';
 const execFileAsync = promisify(execFile);
 
 const PS_SCRIPT = `
-Get-CimInstance Win32_Process |
-  Select-Object ProcessId, ParentProcessId, Name, CommandLine |
+$OutputEncoding = [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+Get-CimInstance Win32_Process -Filter "Name = 'claude.exe' OR Name = 'codex.exe' OR Name = 'node.exe'" |
+  Select-Object ProcessId, ParentProcessId, Name, CommandLine, @{Name='StartedAtMs';Expression={([DateTimeOffset]$_.CreationDate).ToUnixTimeMilliseconds()}} |
   ConvertTo-Json -Compress
 `;
 
@@ -15,6 +16,7 @@ interface PsRow {
   ParentProcessId: number;
   Name: string | null;
   CommandLine: string | null;
+  StartedAtMs?: number;
 }
 
 export async function enumerateProcesses(timeoutMs = 15_000): Promise<ProcInfo[]> {
@@ -37,7 +39,7 @@ export function parsePsOutput(stdout: string): ProcInfo[] {
     const parsed = JSON.parse(stdout);
     rows = Array.isArray(parsed) ? parsed : [parsed];
   } catch {
-    return [];
+    throw new Error('进程列表无法解析，请刷新重试。');
   }
   const out: ProcInfo[] = [];
   for (const r of rows) {
@@ -47,6 +49,7 @@ export function parsePsOutput(stdout: string): ProcInfo[] {
       ppid: r.ParentProcessId ?? 0,
       name: r.Name ?? '',
       cmd: r.CommandLine ?? '',
+      startedAt: r.StartedAtMs,
     });
   }
   return out;

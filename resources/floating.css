@@ -1,0 +1,53 @@
+﻿#floating-compact { display: none; }
+.floating { --compact-x: 0px; --compact-y: 0px; --clip-top: 2px; --clip-left: 0px; --clip-right: 0px; --clip-bottom: 2px; }
+.floating body { padding: 0; }
+.floating .panel {
+  position: absolute; inset: 7px; width: auto; height: auto;
+  clip-path: inset(var(--clip-top) var(--clip-right) var(--clip-bottom) var(--clip-left) round 12px);
+  opacity: 0; pointer-events: none;
+  transition: clip-path 240ms cubic-bezier(.2,.75,.2,1), opacity 150ms ease;
+}
+.floating .panel > * { opacity: 0; transition: opacity 130ms ease; }
+.floating.shell-expanded .panel { clip-path: inset(0 0 0 0 round 16px); opacity: 1; pointer-events: auto; }
+.floating.shell-expanded .panel > * { opacity: 1; transition-delay: 70ms; }
+.floating #floating-compact {
+  display: flex; position: absolute; width: 360px; height: 52px;
+  left: var(--compact-x); top: var(--compact-y); align-items: center; justify-content: center;
+  transition: opacity 150ms ease, transform 240ms cubic-bezier(.2,.75,.2,1);
+  cursor: grab; user-select: none; touch-action: none;
+}
+.floating #floating-compact.dragging { cursor: grabbing; }
+.floating.shell-expanded #floating-compact { opacity: 0; transform: scale(.97); pointer-events: none; }
+.floating .topbar { -webkit-app-region: no-drag; }
+.housing { display:flex;align-items:center;gap:9px;width:348px;height:40px;padding:4px 9px;border:1px solid #cbd5e280;border-radius:10px;background:#f8faff66;box-shadow:0 2px 8px #26394d18;color:#26394d;backdrop-filter:blur(10px); }
+.divider { width:1px;height:23px;background:#cbd5e280;flex:0 0 auto; }
+.floating-agent { display:flex;align-items:center;gap:7px;min-width:0;flex:1;height:30px;padding:3px;--signal:#83909f; }
+.floating-agent img { width:19px;height:19px;object-fit:contain;border-radius:4px;flex-shrink:0; }
+.floating-name { font-size:11px;font-weight:650;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.floating-state { display:flex;align-items:center;gap:5px;color:var(--signal);font-size:10px;font-weight:650;white-space:nowrap; }
+.floating-state::before { content:""; width:5px;height:5px;border-radius:50%;background:currentColor;flex-shrink:0; }
+.floating-agent[data-state=busy],.floating-agent[data-state=done] { --signal:#22926c; }
+.floating-agent[data-state=running] { --signal:#4275d5; }
+.floating-agent[data-state=approval] { --signal:#d04b52; }
+.floating-agent[data-state=input],.floating-agent[data-state=deleting],.floating-agent[data-state=unknown] { --signal:#bd831c; }
+.floating-agent[data-state=paused] { --signal:#83909f; }
+.floating-agent img { animation: float-idle 3.2s ease-in-out infinite; }
+.floating-agent[data-state=running] img { animation: float-running 2.4s ease-in-out infinite; }
+.floating-agent[data-state=busy] img { animation: float-busy 1.4s ease-in-out infinite; }
+.floating-agent[data-state=approval] img { animation: float-approval .7s ease-in-out infinite; }
+.floating-agent[data-state=input] img { animation: float-input 1.1s ease-in-out infinite; }
+.floating-agent[data-state=deleting] img { animation: float-deleting .8s ease-in-out infinite; }
+.floating-agent[data-state=done] img { animation: float-done .9s cubic-bezier(.2,.8,.3,1) both; }
+.floating-agent[data-state=unknown] img { animation: float-unknown 1.8s ease-in-out infinite; }
+.floating-agent[data-state=paused] img { filter: grayscale(1); animation: none; opacity: .7; }
+@keyframes float-idle { 50% { transform: translateY(-1px); } }
+@keyframes float-running { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes float-busy { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+@keyframes float-approval { 0%,100% { transform: translateX(0); } 25% { transform: translateX(-2px) rotate(-4deg); } 75% { transform: translateX(2px) rotate(4deg); } }
+@keyframes float-input { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes float-deleting { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-7deg); } 75% { transform: rotate(7deg); } }
+@keyframes float-done { 0% { transform: scale(.75); opacity: .35; } 65% { transform: scale(1.16); } 100% { transform: scale(1); opacity: 1; } }
+@keyframes float-unknown { 0%,100% { opacity: .45; } 50% { opacity: 1; } }
+@keyframes float-pulse { 50% { opacity:.4; } }
+@media(prefers-reduced-motion:reduce) { .floating *, .floating .panel, .floating #floating-compact { transition:none!important;animation:none!important; } }
+

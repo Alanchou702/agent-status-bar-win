@@ -19,8 +19,11 @@ export interface AppConfig {
   scanIntervalSec: number;
   keepAwakeEnabled: boolean;
   openAtLogin: boolean;
+  notificationsEnabled: boolean;
+  soundEnabled: boolean;
   claudeBusyFreshnessMs: number;
   codexTurnActivityFreshnessMs: number;
+  taskCompleteFreshnessMs: number;
   codexThreadLookupWindowSec: number;
   credit: CreditConfig;
   light: LightConfig;
@@ -32,14 +35,17 @@ export interface AppConfig {
   };
 }
 
-const home = os.homedir();
+const userHomeDir = os.homedir();
 
 const defaults: AppConfig = {
   scanIntervalSec: 3,
   keepAwakeEnabled: true,
   openAtLogin: true,
+  notificationsEnabled: true,
+  soundEnabled: true,
   claudeBusyFreshnessMs: 30_000,
   codexTurnActivityFreshnessMs: 30_000,
+  taskCompleteFreshnessMs: 5_000,
   codexThreadLookupWindowSec: 2 * 3600,
   credit: {
     enabled: true,
@@ -52,47 +58,25 @@ const defaults: AppConfig = {
     y: null,
   },
   paths: {
-    claudeSessionsDir: path.join(home, '.claude', 'sessions'),
-    claudeProjectsDir: path.join(home, '.claude', 'projects'),
-    codexLogsDb: path.join(home, '.codex', 'logs_2.sqlite'),
-    codexStateDb: path.join(home, '.codex', 'state_5.sqlite'),
+    claudeSessionsDir: path.join(userHomeDir, '.claude', 'sessions'),
+    claudeProjectsDir: path.join(userHomeDir, '.claude', 'projects'),
+    codexLogsDb: path.join(userHomeDir, '.codex', 'logs_2.sqlite'),
+    codexStateDb: path.join(userHomeDir, '.codex', 'state_5.sqlite'),
   },
 };
 
 export function configDir(): string {
-  return path.join(process.env.APPDATA ?? home, 'agent-status-bar');
+  return process.env.AGENT_BAR_CONFIG_DIR ?? path.join(process.env.APPDATA ?? userHomeDir, 'agent-status-bar');
 }
 
 export function configFile(): string {
   return path.join(configDir(), 'config.json');
 }
 
-function deepMerge<T>(base: T, override: Partial<T> | undefined): T {
-  if (!override) return base;
-  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
-  for (const [k, v] of Object.entries(override as Record<string, unknown>)) {
-    const baseV = (base as Record<string, unknown>)[k];
-    if (
-      v !== undefined &&
-      v !== null &&
-      typeof v === 'object' &&
-      !Array.isArray(v) &&
-      baseV !== undefined &&
-      typeof baseV === 'object' &&
-      !Array.isArray(baseV)
-    ) {
-      out[k] = deepMerge(baseV as Record<string, unknown>, v as Record<string, unknown>);
-    } else if (v !== undefined) {
-      out[k] = v;
-    }
-  }
-  return out as T;
-}
-
 export function loadConfig(): AppConfig {
   try {
     const raw = JSON.parse(fs.readFileSync(configFile(), 'utf-8')) as Partial<AppConfig>;
-    return deepMerge(defaults, raw);
+    return normalizeConfig(raw as AppConfig);
   } catch {
     return {
       ...defaults,
@@ -105,5 +89,42 @@ export function loadConfig(): AppConfig {
 
 export function saveConfig(config: AppConfig): void {
   fs.mkdirSync(configDir(), { recursive: true });
-  fs.writeFileSync(configFile(), JSON.stringify(config, null, 2), 'utf-8');
+  const temporary = `${configFile()}.${process.pid}.tmp`;
+  fs.writeFileSync(temporary, JSON.stringify(normalizeConfig(config), null, 2), 'utf-8');
+  fs.renameSync(temporary, configFile());
+}
+
+export function normalizeConfig(value: AppConfig): AppConfig {
+  const config = structuredClone(defaults);
+  const raw = value as unknown as Record<string, unknown>;
+  if (!raw || typeof raw !== 'object') return config;
+  for (const key of ['keepAwakeEnabled', 'openAtLogin', 'notificationsEnabled', 'soundEnabled'] as const) {
+    if (typeof raw[key] === 'boolean') config[key] = raw[key];
+  }
+  for (const key of ['scanIntervalSec', 'claudeBusyFreshnessMs', 'codexTurnActivityFreshnessMs', 'taskCompleteFreshnessMs', 'codexThreadLookupWindowSec'] as const) {
+    const n = raw[key];
+    if (typeof n === 'number' && Number.isFinite(n) && n > 0) config[key] = n;
+  }
+  config.scanIntervalSec = Math.min(60, Math.max(2, config.scanIntervalSec));
+  const light = raw.light as Partial<LightConfig> | null;
+  if (light && typeof light === 'object') {
+    if (typeof light.enabled === 'boolean') config.light.enabled = light.enabled;
+    for (const key of ['x', 'y'] as const) {
+      if (typeof light[key] === 'number' && Number.isFinite(light[key])) config.light[key] = Math.round(light[key]!);
+    }
+  }
+  const credit = raw.credit as Partial<CreditConfig> | null;
+  if (credit && typeof credit === 'object') {
+    if (typeof credit.enabled === 'boolean') config.credit.enabled = credit.enabled;
+    if (typeof credit.endpoint === 'string' && credit.endpoint.startsWith('https://')) config.credit.endpoint = credit.endpoint;
+    if (typeof credit.credentialsPath === 'string') config.credit.credentialsPath = credit.credentialsPath;
+    if (typeof credit.refreshIntervalSec === 'number' && Number.isFinite(credit.refreshIntervalSec)) config.credit.refreshIntervalSec = Math.max(60, credit.refreshIntervalSec);
+  }
+  const paths = raw.paths as Partial<AppConfig['paths']> | null;
+  if (paths && typeof paths === 'object') {
+    for (const key of Object.keys(config.paths) as (keyof AppConfig['paths'])[]) {
+      if (typeof paths[key] === 'string' && paths[key]!.trim()) config.paths[key] = paths[key]!;
+    }
+  }
+  return config;
 }

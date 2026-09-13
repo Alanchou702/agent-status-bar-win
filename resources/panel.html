@@ -1,20 +1,74 @@
 <!doctype html>
 <html lang="zh-CN">
 <head>
-<meta charset="utf-8" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'" />
-<style>
-:root{font-family:"Segoe UI",system-ui,sans-serif;color:#f4f6f8;background:transparent;color-scheme:dark}
-*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:transparent}
-body{padding:8px}.panel{width:100%;height:100%;border:1px solid rgba(255,255,255,.23);border-radius:22px;background:linear-gradient(145deg,rgba(38,58,70,.96),rgba(20,31,39,.94) 58%,rgba(41,44,49,.92));box-shadow:0 16px 42px rgba(0,0,0,.45),inset 0 1px rgba(255,255,255,.12);overflow:hidden;display:flex;flex-direction:column;backdrop-filter:blur(24px)}
-.scroll{padding:18px 16px 12px;overflow:auto;flex:1}.header{display:flex;gap:12px;align-items:flex-start}.brand{font-size:13px;font-weight:650;color:#aeb9c1;margin:1px 0 2px}.state{font-size:26px;line-height:1.05;font-weight:700;letter-spacing:.2px}.action{font-size:15px;font-weight:650;color:#aeb9c1;margin-top:3px}.summary{font-size:15px;font-weight:600;line-height:1.35;margin-top:22px}.meta{color:#98a5ac;font-size:12px;margin-top:8px}.section-title{color:#aeb9c1;font-size:12px;font-weight:700;margin:18px 0 8px}.row{display:flex;gap:9px;align-items:flex-start;padding:5px 0}.dot{width:8px;height:8px;border-radius:50%;margin:5px 1px 0 0;flex:0 0 auto;background:#2ed26a;box-shadow:0 0 8px currentColor}.row-main{min-width:0;flex:1}.row-top{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row-sub{font-size:12px;color:#a2adb3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.row-time{font-size:11px;color:#89959c;margin-top:2px}.divider{height:1px;background:rgba(255,255,255,.13);margin:8px 0 0}.actions{padding:11px 16px 12px}.action-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.btn{height:34px;border:1px solid rgba(255,255,255,.24);border-radius:9px;background:rgba(255,255,255,.055);color:#f2f4f5;font:650 14px "Segoe UI";display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}.btn:hover{background:rgba(255,255,255,.13)}.quit{margin:10px 1px 0 auto;border:0;background:transparent;color:#b5bdc1;font:600 13px "Segoe UI";cursor:pointer;display:flex;gap:7px;align-items:center}.signal{display:flex;gap:8px;padding:5px 0 0 1px}.lamp{width:18px;height:18px;border-radius:50%;border:1px solid rgba(235,245,246,.72);background:rgba(255,255,255,.035);box-shadow:0 0 5px rgba(255,255,255,.05)}.lamp.active{border-color:currentColor;background:currentColor;box-shadow:0 0 12px currentColor}.lamp.red{color:#f04443}.lamp.yellow{color:#f8bd35}.lamp.green{color:#2ed26a}.lamp.flash{animation:flash 1.05s ease-in-out infinite}.lamp.fast{animation:flash .48s ease-in-out infinite}@keyframes flash{0%,100%{opacity:.3;transform:scale(.92)}50%{opacity:1;transform:scale(1.08)}}
-</style></head>
-<body><div class="panel"><div class="scroll"><div class="header"><div id="signal" class="signal"><i class="lamp red"></i><i class="lamp yellow"></i><i class="lamp green"></i></div><div><div class="brand">Agent Signal Bar</div><div id="state" class="state">空闲</div><div id="action" class="action">无需处理</div></div></div><div id="summary" class="summary">等待本地 Agent 状态。</div><div id="meta" class="meta">等待状态</div><div id="sessions"></div><div id="events"></div></div><div class="actions"><div class="divider"></div><div class="action-grid"><button id="pause" class="btn">Ⅱ&nbsp;&nbsp;暂停监控</button><button id="settings" class="btn">⚙&nbsp;&nbsp;设置</button></div><button id="quit" class="quit">◯&nbsp;&nbsp;退出</button></div></div>
-<script>
-const {ipcRenderer}=require('electron');const $=id=>document.getElementById(id);let paused=false;
-const names={idle:['空闲','无需处理','当前无需关注','#2ed26a'],running:['运行中','不用处理','Agent 进程正在运行。','#2ed26a'],busy:['工作中','不用处理','Agent 正在读写文件、跑工具或测试。','#2ed26a'],unknown:['状态不可信','请检查','本地状态不可用或无法读取。','#f8bd35']};
-function fmt(t){return t?new Date(t).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}):'—'}
-function setLamps(state){document.querySelectorAll('.lamp').forEach(x=>{x.classList.remove('active','flash','fast')});const s=state==='busy'||state==='running'?'green':state==='unknown'?'yellow':'green';const lamp=document.querySelector('.lamp.'+s);lamp.classList.add('active');if(state==='busy')lamp.classList.add('flash');if(state==='unknown')lamp.classList.add('fast')}
-function render(data){const snaps=data.summary?.snapshots||[];paused=data.paused;const state=snaps.some(s=>s.state==='busy')?'busy':snaps.some(s=>s.state==='running')?'running':snaps.some(s=>s.state==='unknown')?'unknown':'idle';const n=names[state];$('state').textContent=paused?'已暂停':n[0];$('action').textContent=paused?'监控已暂停':n[1];$('summary').textContent=paused?'监控已暂停。':n[2];$('meta').textContent=snaps.length?`实时 ${fmt(data.summary.scannedAt)}`:'等待状态';$('pause').innerHTML=paused?'▶&nbsp;&nbsp;继续监控':'Ⅱ&nbsp;&nbsp;暂停监控';setLamps(paused?'idle':state);$('sessions').innerHTML=snaps.length?'<div class="section-title">当前会话</div>'+snaps.map(s=>{const title=s.client==='claude'?'Claude Code':'Codex';const detail=s.detail||'正在运行';return `<div class="row"><span class="dot" style="background:${s.state==='unknown'?'#f8bd35':'#2ed26a'}"></span><div class="row-main"><div class="row-top">${title}</div><div class="row-sub">${detail}</div></div><span class="row-time">${fmt(s.scannedAt)}</span></div>`}).join(''):'<div class="section-title">当前会话</div><div class="row-sub">暂无运行中的 Agent</div>';$('events').innerHTML='<div class="section-title">最近</div>'+[...snaps,...snaps,...snaps].slice(0,3).map((s,i)=>`<div class="row"><span class="dot"></span><div class="row-main"><div class="row-top">${s.client==='claude'?'Claude Code':'Codex'}</div><div class="row-sub">${s.detail||['状态更新','活动检查','任务完成'][i]}</div></div><span class="row-time">${fmt(s.scannedAt)}</span></div>`).join('')}
-$('pause').onclick=()=>ipcRenderer.send('panel-action','toggle-monitoring');$('settings').onclick=()=>ipcRenderer.send('panel-action','open-settings');$('quit').onclick=()=>ipcRenderer.send('panel-action','quit');ipcRenderer.on('panel-state',(_,data)=>render(data));
-</script></body></html>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:">
+  <title>Agent Signal Bar</title>
+  <link rel="stylesheet" href="panel.css">
+  <link rel="stylesheet" href="floating.css">
+  <script defer src="floating.js"></script>
+  <script defer src="panel.js"></script>
+</head>
+<body>
+<div id="floating-compact" title="按住拖动"><div class="housing" id="housing" data-state="idle"><div class="floating-agent" id="floating-claude"><img src="claude.png" alt=""><span class="floating-name">Claude Code</span><span class="floating-state">连接中</span></div><span class="divider" aria-hidden="true"></span><div class="floating-agent" id="floating-codex"><img src="codex.png" alt=""><span class="floating-name">Codex</span><span class="floating-state">连接中</span></div></div></div>
+<main class="panel">
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Agent Signal Bar</span></div>
+    <div class="window-actions"><button class="icon-button" id="settings-open" title="设置" aria-label="打开设置">⚙</button><button class="icon-button" id="close" title="收起面板" aria-label="收起面板">×</button></div>
+  </header>
+  <div class="tabs" role="tablist" aria-label="面板视图">
+    <button id="overview-tab" role="tab" aria-selected="true" aria-controls="overview" class="tab selected">状态总览</button>
+    <button id="activity-tab" role="tab" aria-selected="false" aria-controls="activity" class="tab">活动记录 <span id="event-count">0</span></button>
+    <span class="connection" id="connection">连接中</span>
+  </div>
+  <div class="content">
+    <section id="overview" role="tabpanel" aria-labelledby="overview-tab">
+      <div class="status-hero" id="hero" data-state="idle">
+        <div class="eyebrow"><span class="live-dot"></span><span id="mode">本机监控</span><span id="live-time" class="timestamp">首次扫描中</span></div>
+        <div class="hero-line"><h1 id="status-label">正在连接</h1><div class="signal-meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>
+        <p id="status-description">正在读取本机 Agent 的运行状态。</p>
+      </div>
+      <div id="error" class="notice error" role="alert" hidden></div>
+      <div id="scan-warning" class="notice" hidden></div>
+      <div id="demo-notice" class="notice" hidden>正在预览模拟状态，8 秒后恢复真实监控。</div>
+      <div class="section-heading"><h2>你的 Agents</h2><span id="agent-count">自动发现</span></div>
+      <div id="agents" class="agent-list"></div>
+      <details id="codex-sessions" class="session-section" open hidden>
+        <summary>Codex 会话 <span id="session-total"></span></summary>
+        <div class="session-controls"><input id="session-search" type="search" placeholder="搜索会话或项目" aria-label="搜索 Codex 会话"><select id="session-filter" aria-label="筛选 Codex 会话"><option value="active">活跃会话</option><option value="attention">需要处理</option><option value="all">全部会话</option></select></div>
+        <div id="session-list" class="session-list"></div>
+        <div id="session-count" class="session-count"></div>
+      </details>
+      <div class="credit-section" id="credit-section" hidden>
+        <div class="section-heading"><h2>Claude 剩余额度</h2><span id="credit-note"></span></div>
+        <div id="credits"></div>
+      </div>
+      <div class="last-event" id="last-event"><span class="quiet-dot"></span><span>状态发生变化时，活动记录会自动更新。</span></div>
+    </section>
+    <section id="activity" role="tabpanel" aria-labelledby="activity-tab" hidden>
+      <div class="page-heading"><h1>活动记录</h1><p>本次运行期间的状态变化 · 最多保留 40 条</p></div>
+      <div id="events" class="timeline"></div>
+    </section>
+    <section id="settings" hidden>
+      <div class="page-heading"><button id="settings-back" class="back-button">← 返回总览</button><h1>设置</h1><p>按你的工作节奏调整监控。</p></div>
+      <form id="settings-form">
+        <label class="setting-row"><span><strong>桌面信号灯</strong><small>始终置顶，可拖动到任意屏幕</small></span><input type="checkbox" name="lightEnabled" role="switch"></label>
+        <label class="setting-row"><span><strong>系统通知</strong><small>需要审批、输入或任务完成时提醒</small></span><input type="checkbox" name="notificationsEnabled" role="switch"></label>
+        <label class="setting-row"><span><strong>状态提示音</strong><small>审批、输入、完成和异常时播放不同提示音</small></span><input type="checkbox" name="soundEnabled" role="switch"></label>
+        <label class="setting-row"><span><strong>工作时防止睡眠</strong><small>等待操作或暂停监控时自动释放</small></span><input type="checkbox" name="keepAwakeEnabled" role="switch"></label>
+        <label class="setting-row"><span><strong>登录时启动</strong><small>Windows 登录后在托盘中运行</small></span><input type="checkbox" name="openAtLogin" role="switch"></label>
+        <label class="setting-row"><span><strong>显示 Claude 额度</strong><small>使用本机 Claude 登录信息查询</small></span><input type="checkbox" name="creditEnabled" role="switch"></label>
+        <label class="setting-row"><span><strong>刷新间隔</strong><small>间隔越短，扫描越频繁</small></span><span class="number-field"><input name="scanIntervalSec" type="number" min="2" max="60" required aria-label="刷新间隔，秒"><span>秒</span></span></label>
+        <div class="save-row"><span id="save-message" role="status"></span><button type="submit" class="button primary" id="save-settings">保存设置</button></div>
+      </form>
+    </section>
+  </div>
+  <footer>
+    <div class="toolbar"><button id="pause" class="button primary">暂停监控</button><button id="refresh" class="button">↻ 刷新</button><button id="quit" class="text-button">退出</button></div>
+    <div class="footnote"><span id="footnote">仅监控本机 Agent</span><span>Windows · v0.4</span></div>
+  </footer>
+</main>
+</body>
+</html>
+

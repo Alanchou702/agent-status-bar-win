@@ -1,273 +1,131 @@
 import { app } from 'electron';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { AgentClient, AgentSnapshot, AgentState, AgentSummary, CreditSnapshot } from '../shared/types.js';
-import { configDir, loadConfig, saveConfig } from './config.js';
-import {
-  createLightWindow,
-  defaultLightPosition,
-  destroyLight,
-  isLightVisible,
-  updateLight,
-} from './desktopLight.js';
+import { configDir, loadConfig, saveConfig, type AppConfig } from './config.js';
+import { createLightWindow, defaultLightPosition, destroyLight, updateLight } from './desktopLight.js';
 import { setKeepAwake } from './keepAwake.js';
-import { notify, type NotificationKind } from './notifications.js';
+import { notify } from './notifications.js';
+import { playStatusSound } from './sounds.js';
 import { scanClaudeCredits } from './scanner/creditScanner.js';
-import { scanAll } from './scanner/scanAll.js';
+import { scanInWorker } from './scanner/scanService.js';
 import { statusFor } from './statusLight.js';
-import { createTray, setTrayBlink, updateTray, type SimulatedState, type TrayHandlers } from './tray.js';
-import { createPanelWindow, installPanelIpc, panelPath, showPanel, updatePanel } from './panel.js';
+import { createTray, destroyTray, setTrayLight, updateTray, type TrayHandlers } from './tray.js';
+import { createPanelWindow, destroyPanel, showPanel, updatePanel } from './panel.js';
+import { Monitor, userSettings } from './monitor.js';
+import type { UserSettings } from '../shared/panel.js';
 import { startWatch } from './watch.js';
+import { loginTarget } from './startup.js';
 
-const CLIENT_NAME: Record<AgentClient, string> = { claude: 'Claude Code', codex: 'Codex' };
+let monitor: Monitor | undefined;
+let config: AppConfig;
+let resources = '';
+const lockFile = path.join(configDir(), 'app.lock');
 
-let summary: AgentSummary = { snapshots: [], scannedAt: 0 };
-let prevKind = new Map<AgentClient, NotificationKind | null>();
-let lastClaudeCredits: CreditSnapshot | undefined;
-let lastCreditScanAt = 0;
-let resourcesDir = '';
-let startAtLogin = false;
-let lightEnabled = false;
-let simulated: AgentSummary | null = null;
-let simulateTimer: ReturnType<typeof setTimeout> | null = null;
-let scanInFlight = false;
-let monitoringPaused = false;
-
-/** Push the current summary into the light + tray visuals. */
-function applyVisuals(s: AgentSummary): void {
-  const light = statusFor(s);
-  updateLight(light);
-  setTrayBlink(resourcesDir, light.blinkIcon);
-  updateTray(resourcesDir, s, startAtLogin, lightEnabled, trayHandlers);
-  updatePanel(s, monitoringPaused);
+function applyLogin(on: boolean): void {
+  // Development runs must include the absolute app path.
+  app.setLoginItemSettings({ openAtLogin: on, ...loginTarget(app.isPackaged, process.execPath, app.getAppPath(), process.env.PORTABLE_EXECUTABLE_FILE) });
 }
-
-function buildSimulatedSummary(state: SimulatedState): AgentSummary {
-  const now = Date.now();
-  const snap = (client: AgentClient, st: AgentState, detail?: string): AgentSnapshot => ({
-    client,
-    state: st,
-    detail,
-    scannedAt: now,
-    claude:
-      client === 'claude'
-        ? { pid: 0, sessionId: 'sim', cwd: '', startedAt: now, updatedAt: now, status: st }
-        : undefined,
-    codex: client === 'codex' ? { threadId: 'sim', title: 'Simulation', cwd: '', updatedAt: now } : undefined,
+function applyLight(): void {
+  if (!config.light.enabled) { destroyLight(); return; }
+  const pos = config.light.x !== null && config.light.y !== null ? { x: config.light.x, y: config.light.y } : defaultLightPosition();
+  createLightWindow(path.join(resources, 'light.html'), pos.x, pos.y, (x, y) => {
+    config.light.x = x; config.light.y = y;
+    try { saveConfig(config); } catch (error) { console.error('[position]', error); }
   });
-  switch (state) {
-    case 'running':
-      return { snapshots: [snap('claude', 'running', 'running'), snap('codex', 'running', 'running')], scannedAt: now };
-    case 'busy':
-      return { snapshots: [snap('claude', 'busy', 'working'), snap('codex', 'busy', 'working')], scannedAt: now };
-    case 'approval':
-      return {
-        snapshots: [snap('claude', 'busy', 'working'), snap('codex', 'busy', 'waiting for approval')],
-        scannedAt: now,
-      };
-    default:
-      return { snapshots: [snap('claude', 'idle'), snap('codex', 'idle')], scannedAt: now };
+  if (monitor) updateLight(statusFor(monitor.getState().summary, monitor.getState().paused));
+}
+function saveSettings(value: unknown): void {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('设置格式不正确');
+  const input = value as Record<string, unknown>;
+  const expected = userSettings(config);
+  for (const key of Object.keys(expected) as (keyof UserSettings)[]) {
+    if (key === 'scanIntervalSec') {
+      if (typeof input[key] !== 'number' || !Number.isInteger(input[key]) || input[key] < 2 || input[key] > 60) throw new Error('刷新间隔应为 2–60 秒');
+    } else if (typeof input[key] !== 'boolean') throw new Error('设置格式不正确');
   }
-}
-
-function runSimulation(state: SimulatedState): void {
-  simulated = buildSimulatedSummary(state);
-  if (simulateTimer) clearTimeout(simulateTimer);
-  simulateTimer = setTimeout(() => {
-    simulated = null;
-    void runScan(false);
-  }, 8000);
-  applyVisuals(simulated);
-}
-
-function applyLoginItemSetting(on: boolean): void {
-  try {
-    app.setLoginItemSettings({ openAtLogin: on, args: on ? ['--watch'] : [] });
-  } catch (e) {
-    console.error('[login]', e);
+  const settings = input as unknown as UserSettings;
+  const next = structuredClone(config);
+  next.scanIntervalSec = settings.scanIntervalSec;
+  next.openAtLogin = settings.openAtLogin;
+  next.keepAwakeEnabled = settings.keepAwakeEnabled;
+  next.notificationsEnabled = settings.notificationsEnabled;
+  next.soundEnabled = settings.soundEnabled;
+  next.light.enabled = settings.lightEnabled;
+  next.credit.enabled = settings.creditEnabled;
+  if (next.openAtLogin !== config.openAtLogin) applyLogin(next.openAtLogin);
+  try { saveConfig(next); }
+  catch (error) {
+    if (next.openAtLogin !== config.openAtLogin) applyLogin(config.openAtLogin);
+    throw error;
   }
+  const lightChanged = config.light.enabled !== next.light.enabled;
+  config = next;
+  if (lightChanged) applyLight();
+  monitor!.configure(config);
 }
-
-const APP_LOCK = path.join(configDir(), 'app.lock');
-
-function writeAppLock(): void {
-  try {
-    fs.mkdirSync(configDir(), { recursive: true });
-    fs.writeFileSync(APP_LOCK, String(process.pid));
-  } catch (e) {
-    console.error('[lock]', e);
-  }
-}
-
-function removeAppLock(): void {
-  try {
-    fs.unlinkSync(APP_LOCK);
-  } catch {
-    /* ignore */
-  }
-}
-
-function toggleLight(): void {
-  lightEnabled = !lightEnabled;
-  const cfg = loadConfig();
-  cfg.light.enabled = lightEnabled;
-  saveConfig(cfg);
-  if (lightEnabled) {
-    const pos =
-      cfg.light.x !== null && cfg.light.y !== null
-        ? { x: cfg.light.x, y: cfg.light.y }
-        : defaultLightPosition();
-    createLightWindow(path.join(resourcesDir, 'light.html'), pos.x, pos.y, saveLightPosition);
-    const light = statusFor(summary);
-    updateLight(light);
-  } else {
-    destroyLight();
-  }
-  updateTray(resourcesDir, summary, startAtLogin, lightEnabled, trayHandlers);
-}
-
-function saveLightPosition(x: number, y: number): void {
-  const cfg = loadConfig();
-  cfg.light.x = x;
-  cfg.light.y = y;
-  saveConfig(cfg);
-}
-
-function kindOf(snap: AgentSnapshot): NotificationKind | null {
-  if (snap.state === 'busy') {
-    if (snap.detail?.includes('approval')) return 'waiting-for-approval';
-    if (snap.detail?.includes('your input')) return 'waiting-for-input';
-    return 'busy';
-  }
-  if (snap.state === 'idle') return 'idle';
-  return null;
-}
-
-function handleNotifications(snap: AgentSnapshot): void {
-  const client = snap.client;
-  const kind = kindOf(snap);
-  const prev = prevKind.get(client);
-  prevKind.set(client, kind);
-  if (kind === null || kind === prev) return;
-
-  const name = CLIENT_NAME[client];
-  const icon = path.join(resourcesDir, `${client}.png`);
-  const body = `${name}: ${snap.detail ?? snap.state}`;
-  if (kind === 'waiting-for-approval') {
-    notify(client, kind, `${name} needs your approval`, body, icon);
-  } else if (kind === 'waiting-for-input') {
-    notify(client, kind, `${name} is waiting for your input`, body, icon);
-  } else if (kind === 'busy') {
-    notify(client, kind, `${name} is working`, body, icon);
-  } else if (kind === 'idle') {
-    notify(client, kind, `${name} finished`, body, icon);
-  }
-}
-
-async function runScan(forceCredits: boolean): Promise<void> {
-  if (monitoringPaused || scanInFlight) return;
-  scanInFlight = true;
-  try {
-    const config = loadConfig();
-    const result = await scanAll(config);
-    summary = result.summary;
-
-    // Attach cached credits to the claude row.
-    if (lastClaudeCredits) {
-      const claudeSnap = summary.snapshots.find((s) => s.client === 'claude');
-      if (claudeSnap) claudeSnap.credits = lastClaudeCredits;
-    }
-
-    for (const snap of summary.snapshots) handleNotifications(snap);
-
-    if (config.keepAwakeEnabled) setKeepAwake(result.anyBusy);
-
-    const now = Date.now();
-    if (forceCredits || now - lastCreditScanAt > config.credit.refreshIntervalSec * 1000) {
-      lastCreditScanAt = now;
-      const credits = await scanClaudeCredits(config.credit);
-      lastClaudeCredits = credits;
-      const claudeSnap = summary.snapshots.find((s) => s.client === 'claude');
-      if (claudeSnap) claudeSnap.credits = credits;
-    }
-
-    if (!simulated) applyVisuals(summary);
-  } catch (e) {
-    console.error('[scan]', e);
-  } finally {
-    scanInFlight = false;
-  }
-}
-
-const trayHandlers: TrayHandlers = {
-  onRefresh: () => void runScan(true),
-  onToggleStartAtLogin: () => {
-    startAtLogin = !startAtLogin;
-    const cfg = loadConfig();
-    cfg.openAtLogin = startAtLogin;
-    saveConfig(cfg);
-    applyLoginItemSetting(startAtLogin);
-    updateTray(resourcesDir, summary, startAtLogin, lightEnabled, trayHandlers);
-  },
-  onToggleDesktopLight: () => toggleLight(),
-  onToggleMonitoring: () => {
-    monitoringPaused = !monitoringPaused;
-    if (!monitoringPaused) void runScan(true);
-    applyVisuals(summary);
-  },
-  onOpenSettings: () => showPanel(summary, monitoringPaused),
-  onShowPanel: () => showPanel(summary, monitoringPaused),
-  onSimulate: (state) => runSimulation(state),
+const handlers: TrayHandlers = {
+  onRefresh: () => { void monitor?.refresh(true); },
+  onToggleStartAtLogin: () => saveSettings({ ...userSettings(config), openAtLogin: !config.openAtLogin }),
+  onToggleDesktopLight: () => saveSettings({ ...userSettings(config), lightEnabled: !config.light.enabled }),
+  onToggleMonitoring: () => monitor?.togglePaused(),
+  onOpenSettings: () => showPanel('settings'),
+  onShowPanel: () => showPanel(),
+  onSimulate: state => monitor?.simulate(state),
   onQuit: () => app.quit(),
 };
 
-const isWatchMode = process.argv.includes('--watch');
-
-if (isWatchMode) {
-  app.whenReady().then(() => startWatch());
+if (process.argv.includes('--watch')) {
+  void app.whenReady().then(startWatch);
+} else if (!app.requestSingleInstanceLock()) {
+  app.quit();
 } else {
-  const gotLock = app.requestSingleInstanceLock();
-  if (!gotLock) {
-    app.quit();
-  } else {
-    writeAppLock();
-    app.on('will-quit', removeAppLock);
-    app.on('second-instance', () => app.quit());
-
-    app.whenReady().then(() => {
-      app.setAppUserModelId('com.zhuhuibin.AgentStatusBar');
-
-      resourcesDir = app.isPackaged
-        ? path.join(process.resourcesPath, 'resources')
-        : path.join(app.getAppPath(), 'resources');
-
-      const config = loadConfig();
-      startAtLogin = config.openAtLogin;
-      lightEnabled = config.light.enabled;
-      if (startAtLogin) applyLoginItemSetting(true);
-
-      installPanelIpc();
-      createPanelWindow(panelPath(resourcesDir), {
-        onToggleMonitoring: trayHandlers.onToggleMonitoring,
-        onOpenSettings: trayHandlers.onOpenSettings,
-        onQuit: trayHandlers.onQuit,
-      });
-      createTray(resourcesDir, trayHandlers, startAtLogin, lightEnabled);
-
-      if (lightEnabled) {
-        const pos =
-          config.light.x !== null && config.light.y !== null
-            ? { x: config.light.x, y: config.light.y }
-            : defaultLightPosition();
-        createLightWindow(path.join(resourcesDir, 'light.html'), pos.x, pos.y, saveLightPosition);
-      }
-
-      void runScan(true);
-      setInterval(() => void runScan(false), config.scanIntervalSec * 1000);
+  app.on('second-instance', () => { if (app.isReady()) showPanel(); });
+  app.on('window-all-closed', () => { /* Tray application remains available. */ });
+  app.on('before-quit', () => {
+    monitor?.stop();
+    destroyTray(); destroyLight(); destroyPanel();
+    try {
+      if (fs.readFileSync(lockFile, 'utf8') === String(process.pid)) fs.unlinkSync(lockFile);
+    } catch { /* No lock to clean. */ }
+  });
+  void app.whenReady().then(() => {
+    app.setAppUserModelId('com.zhuhuibin.AgentStatusBar');
+    resources = app.isPackaged ? path.join(process.resourcesPath, 'resources') : path.join(app.getAppPath(), 'resources');
+    config = loadConfig();
+    fs.mkdirSync(configDir(), { recursive: true });
+    fs.writeFileSync(lockFile, String(process.pid));
+    // Test/dev launches can opt out without changing the user's login settings.
+    if (!process.env.AGENT_BAR_CONFIG_DIR) {
+      try { applyLogin(config.openAtLogin); } catch (error) { console.error('[login]', error); }
+    }
+    monitor = new Monitor(config, {
+      scan: scanInWorker, credits: scanClaudeCredits, keepAwake: setKeepAwake,
+      publish: state => {
+        const light = statusFor(state.summary, state.paused);
+        updateLight(light); setTrayLight(resources, light);
+        updateTray(state, handlers); updatePanel(state);
+      },
+      transition: event => {
+        const name = event.client === 'claude' ? 'Claude Code' : 'Codex';
+        const kind = event.state === 'approval' ? 'waiting-for-approval' : event.state === 'input' ? 'waiting-for-input' : 'idle';
+        if (config.soundEnabled) playStatusSound(resources, event.state);
+        if (!config.notificationsEnabled) return;
+        notify(event.client, kind, `${name} · ${event.label}`,
+          `${event.sessionTitle || (event.sessionId ? '会话 ' + event.sessionId.slice(0, 8) : name)} · ${event.state === 'done' ? '任务结果已就绪。' : '需要你处理。'}`, path.join(resources, `${event.client}.png`), event.sessionId);
+      },
     });
-
-    app.on('window-all-closed', () => {
-      /* keep running in tray */
+    createPanelWindow(resources, {
+      state: () => monitor!.getState(), settings: saveSettings,
+      action: action => {
+        if (action === 'refresh') handlers.onRefresh();
+        if (action === 'toggle-monitoring') handlers.onToggleMonitoring();
+        if (action === 'quit') handlers.onQuit();
+      },
     });
-  }
+    createTray(resources, handlers);
+    applyLight();
+    void monitor.refresh(true);
+    if (process.argv.includes('--show')) showPanel();
+  }).catch(error => { console.error('[startup]', error); app.quit(); });
 }
+

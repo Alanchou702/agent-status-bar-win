@@ -1,14 +1,72 @@
-import { Menu, Tray, nativeImage } from 'electron';
+import { Menu, Tray, nativeImage, type NativeImage } from 'electron';
 import * as path from 'node:path';
-import type { AgentSnapshot, AgentSummary, AgentState } from '../shared/types.js';
+import type { PanelState } from '../shared/panel.js';
+import type { StatusLight } from './statusLight.js';
+import type { DisplayState } from '../shared/status.js';
 
-export type SimulatedState = 'idle' | 'running' | 'busy' | 'approval';
-export interface TrayHandlers { onRefresh:()=>void; onToggleStartAtLogin:()=>void; onToggleDesktopLight:()=>void; onToggleMonitoring:()=>void; onOpenSettings:()=>void; onSimulate:(state:SimulatedState)=>void; onQuit:()=>void; onShowPanel:()=>void }
-let tray:Tray|null=null;let blinkTimer:ReturnType<typeof setInterval>|null=null;let blinking=false;
-const isApproval=(s:AgentSnapshot)=>s.state==='busy'&&!!s.detail&&/approval|permission/i.test(s.detail);
-function pickIconFile(s:AgentSummary){if(s.snapshots.some(isApproval))return'tray-approval.ico';if(s.snapshots.some(x=>x.state==='busy'))return'tray-busy.ico';if(s.snapshots.some(x=>x.state==='running'))return'tray-running.ico';return'tray-idle.ico'}
-function stateLabel(state:AgentState,detail?:string){const main=state==='busy'?'工作中':state==='running'?'运行中':state==='idle'?'空闲':'状态不可信';return detail?`${main} · ${detail}`:main}
-function buildMenu(summary:AgentSummary,start:boolean,light:boolean,h:TrayHandlers):Electron.MenuItemConstructorOptions[]{return[{label:'打开 Agent Signal Bar',click:()=>h.onShowPanel()},{type:'separator'},{label:'刷新状态',click:()=>h.onRefresh()},{label:'登录时启动',type:'checkbox',checked:start,click:()=>h.onToggleStartAtLogin()},{label:'显示桌面信号灯',type:'checkbox',checked:light,click:()=>h.onToggleDesktopLight()},{label:'模拟状态',submenu:[{label:'空闲',click:()=>h.onSimulate('idle')},{label:'运行中',click:()=>h.onSimulate('running')},{label:'工作中',click:()=>h.onSimulate('busy')},{label:'等待授权',click:()=>h.onSimulate('approval')}]},{type:'separator'},...summary.snapshots.map(s=>({label:`${s.client==='claude'?'Claude Code':'Codex'} · ${stateLabel(s.state,s.detail)}`,enabled:false})),{type:'separator'},{label:'退出',click:()=>h.onQuit()}]}
-export function createTray(resourcesDir:string,h:TrayHandlers,start:boolean,light:boolean):Tray{tray=new Tray(nativeImage.createFromPath(path.join(resourcesDir,'tray-idle.ico')));tray.setToolTip('Agent Signal Bar');tray.on('click',()=>h.onShowPanel());tray.setContextMenu(Menu.buildFromTemplate(buildMenu({snapshots:[],scannedAt:Date.now()},start,light,h)));return tray}
-export function updateTray(resourcesDir:string,summary:AgentSummary,start:boolean,light:boolean,h:TrayHandlers):void{if(!tray)return;if(!blinking)tray.setImage(nativeImage.createFromPath(path.join(resourcesDir,pickIconFile(summary))));tray.setToolTip(summary.snapshots.map(s=>`${s.client==='claude'?'Claude':'Codex'}: ${s.state}`).join(' · ')||'Agent Signal Bar');tray.setContextMenu(Menu.buildFromTemplate(buildMenu(summary,start,light,h)))}
-export function setTrayBlink(resourcesDir:string,blinkIcon:string|null):void{blinking=blinkIcon!==null;if(blinkIcon&&!blinkTimer){let visible=true;blinkTimer=setInterval(()=>{if(!tray)return;visible=!visible;tray.setImage(visible?nativeImage.createFromPath(path.join(resourcesDir,blinkIcon)):nativeImage.createEmpty())},500)}else if(!blinkIcon&&blinkTimer){clearInterval(blinkTimer);blinkTimer=null;tray?.setImage(nativeImage.createFromPath(path.join(resourcesDir,'tray-idle.ico')))}}
+export type SimulatedState = DisplayState;
+export interface TrayHandlers {
+  onRefresh: () => void; onToggleStartAtLogin: () => void; onToggleDesktopLight: () => void;
+  onToggleMonitoring: () => void; onOpenSettings: () => void;
+  onSimulate: (state: SimulatedState) => void; onQuit: () => void; onShowPanel: () => void;
+}
+let tray: Tray | null = null;
+let timer: ReturnType<typeof setInterval> | null = null;
+let lastLight = '';
+let lastMenu = '';
+const images = new Map<string, NativeImage>();
+function icon(resources: string, name: string): NativeImage {
+  const file = path.join(resources, name);
+  if (!images.has(file)) images.set(file, nativeImage.createFromPath(file));
+  return images.get(file)!;
+}
+export function createTray(resources: string, handlers: TrayHandlers): void {
+  tray = new Tray(icon(resources, 'tray-idle.ico'));
+  tray.setToolTip('Agent Signal Bar · 正在连接');
+  tray.on('click', handlers.onShowPanel);
+}
+export function updateTray(state: PanelState, handlers: TrayHandlers): void {
+  if (!tray) return;
+  const signature = JSON.stringify([state.status.state, state.paused, state.simulated, state.settings, state.agents]);
+  if (signature === lastMenu) return;
+  lastMenu = signature;
+  tray.setToolTip(`Agent Signal Bar · ${state.status.label}${state.simulated ? '（模拟）' : ''}`);
+  const simulation: [DisplayState, string][] = [['idle', '未运行'], ['running', '待命'], ['busy', '工作中'], ['approval', '等待审批'], ['input', '等待输入'], ['deleting', '删除文件'], ['done', '任务完成'], ['unknown', '状态不可用']];
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: '打开状态面板', click: handlers.onShowPanel },
+    { label: '设置', click: handlers.onOpenSettings },
+    { type: 'separator' },
+    ...state.agents.map(a => ({ label: `${a.client === 'claude' ? 'Claude Code' : 'Codex'} · ${state.paused ? '已暂停' : a.status.label}${a.client === 'codex' && a.sessionCount ? ' · ' + a.sessionCount + ' 个会话' : ''}`, enabled: false })),
+    { type: 'separator' },
+    { label: state.paused ? '恢复监控' : '暂停监控', click: handlers.onToggleMonitoring },
+    { label: '刷新状态', enabled: !state.paused, click: handlers.onRefresh },
+    { label: '显示桌面灯', type: 'checkbox', checked: state.settings.lightEnabled, click: handlers.onToggleDesktopLight },
+    { label: '登录时启动', type: 'checkbox', checked: state.settings.openAtLogin, click: handlers.onToggleStartAtLogin },
+    { label: '预览信号灯（8 秒）', submenu: simulation.map(([value, label]) => ({ label, click: () => handlers.onSimulate(value) })) },
+    { type: 'separator' },
+    { label: '退出', click: handlers.onQuit },
+  ]));
+}
+export function setTrayLight(resources: string, light: StatusLight): void {
+  if (!tray) return;
+  const signature = JSON.stringify(light);
+  if (signature === lastLight) return;
+  lastLight = signature;
+  if (timer) clearInterval(timer);
+  timer = null;
+  const active = icon(resources, light.frames[0]);
+  tray.setImage(active);
+  if (light.blink) {
+    let on = true;
+    const dim = icon(resources, 'tray-idle.ico');
+    timer = setInterval(() => { on = !on; tray?.setImage(on ? active : dim); }, light.frameMs);
+  }
+}
+export function destroyTray(): void {
+  if (timer) clearInterval(timer);
+  timer = null;
+  tray?.destroy();
+  tray = null;
+  images.clear();
+}
+

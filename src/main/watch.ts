@@ -9,14 +9,10 @@ const POLL_MS = 2000;
 const LOCK_FILE = path.join(configDir(), 'watch.lock');
 const APP_LOCK = path.join(configDir(), 'app.lock');
 
+/** Lock age does not indicate process liveness: a healthy app may run for days. */
 function pidAlive(pid: number): boolean {
-  if (!pid || pid <= 0) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return true; } catch { return false; }
 }
 
 function acquireWatchLock(): boolean {
@@ -24,11 +20,12 @@ function acquireWatchLock(): boolean {
     const existing = Number(fs.readFileSync(LOCK_FILE, 'utf-8'));
     if (pidAlive(existing)) return false;
   } catch {
-    /* no lock or stale */
+    /* no lock or unreadable — safe to take it */
   }
   try {
     fs.mkdirSync(configDir(), { recursive: true });
-    fs.writeFileSync(LOCK_FILE, String(process.pid));
+    try { fs.unlinkSync(LOCK_FILE); } catch { /* Missing stale lock. */ }
+    fs.writeFileSync(LOCK_FILE, String(process.pid), { flag: 'wx' });
     return true;
   } catch {
     return false;
@@ -71,18 +68,20 @@ export function startWatch(): void {
   }
   app.on('will-quit', releaseWatchLock);
 
-  let agentsWereRunning = false;
+  let inFlight = false;
   const tick = async (): Promise<void> => {
+    if (inFlight) return;
+    inFlight = true;
     try {
       const procs = await enumerateProcesses();
       const agentsRunning = procs.some((p) => isClaudeProcess(p) || isCodexProcess(p));
-      if (agentsRunning && !agentsWereRunning) {
+      if (agentsRunning) {
         if (!mainAppRunning()) launchMainApp();
+        app.quit();
       }
-      agentsWereRunning = agentsRunning;
     } catch {
       /* keep watching */
-    }
+    } finally { inFlight = false; }
   };
 
   void tick();

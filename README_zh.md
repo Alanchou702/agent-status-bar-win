@@ -1,118 +1,87 @@
-# Agent 状态栏 for Windows
+﻿# Agent Signal Bar for Windows · 0.4.0
 
-Windows 系统托盘应用，用于监控 AI 编程助手（Claude Code & OpenAI Codex）的运行状态，并通过托盘图标、桌面指示灯和系统通知展示代理状态。
+监控本机 Claude Code 和 Codex 的 Windows 托盘工具，使用 Electron + TypeScript。
 
-## 功能特性
+## 启动
 
-- **系统托盘监控** — 实时显示 Claude Code 和 Codex 在 Windows 任务栏托盘中的状态
-- **桌面指示灯** — 可拖拽的彩色指示灯，一眼看出代理活动状态（绿色=工作中，蓝色=运行中，灰色=空闲，红色=等待审批）
-- **托盘图标状态**
-  - 灰色圆圈：空闲
-  - 蓝色圆圈：运行中
-  - 绿色闪烁：工作中
-  - 红色闪烁：等待审批
-- **系统通知** — 代理开始工作、等待输入、需要审批或完成时发送 OS 级别通知
-- **积分追踪** — 在托盘菜单中显示 Claude API 剩余积分（5小时额度和每周额度）
-- **防睡眠** — 代理活跃工作时阻止 Windows 进入睡眠
-- **开机自启** — 随 Windows 自动启动
-- **守护模式** (`--watch`) — 轻量级无头监控，检测到代理启动时自动拉起主程序
-- **状态模拟** — 内置模拟功能，可测试托盘图标和通知效果
+打开 `release/AgentStatusBar 0.4.0.exe`，单击托盘图标，或把鼠标移到桌面悬浮窗上。
 
-## 截图
+源码运行（建议 Node.js 24 LTS）：
 
-| 托盘图标 | 桌面指示灯 |
-|----------|------------|
-| 灰色空闲 | 灰色灯光 |
-| 蓝色运行中 | 蓝色灯光 |
-| 绿色忙碌（闪烁） | 绿色灯光（闪烁） |
-| 红色审批中（闪烁） | 红色灯光（闪烁） |
-
-## 安装
-
-### 从源码运行
-
-```bash
-npm install
-npm start
+```powershell
+npm.cmd install
+npm.cmd start
 ```
 
-### 构建安装包
+更新便携版时，先从托盘退出旧版，再打开新版。开启登录启动时，新版首次启动会更新启动器路径。
 
-```bash
-npm run dist
+## Codex 多会话监控
+
+- 同时扫描当前配置目录中的全部未归档会话，以及活动日志中新出现、尚未写入会话目录的线程，没有“只取最新线程”的数量限制。
+- 总览按“审批 → 输入 → 删除 → 工作 → 异常 → 完成 → 待命”的优先级汇总所有会话，任意会话需要处理时都会提示。
+- 展开 Codex 会话列表，查看每个会话的标题、项目目录、线程短 ID、活动时间和状态。
+- 支持“活跃会话 / 需要处理 / 全部会话”筛选，以及按标题、项目路径、线程 ID 搜索。
+- 无近期活动的历史记录不会因为另一个 Codex 进程正在运行而全部显示为“工作中”。
+- 子会话有记录时会单独列出。活动记录和通知按线程 ID 独立追踪，两场会话同时完成或等待审批不会相互覆盖或共享冷却。
+- 一批读取活动数据库，再逐会话读取 rollout 尾部，利用任务开始、完成、中断和对应工具调用结果补充状态。
+- 结合当前 Codex 进程启动时间，排除旧进程遗留的未完成记录。当前进程内的长时间任务和等待不因超过两小时日志窗口而直接被过滤。
+
+## 悬浮窗
+
+- 鼠标悬停约 220 毫秒，原窗口展开为完整面板，不另外弹窗，不主动抢走键盘焦点。
+- 面板内可查看、搜索会话，暂停监控，修改设置。
+- 鼠标离开约 320 毫秒后开始收起，转场约 240 毫秒；短暂移出后返回会取消收起。
+- 点击紧凑浮窗也能展开；按住拖动时不展开，松开后保存位置。
+- 关闭按钮和 Escape 在悬浮面板里会回到紧凑样式，桌面灯继续显示。
+- 收起不销毁页面，保留当前视图、搜索条件和未保存的设置。
+- 根据浮窗所在显示器和工作区域决定展开方向，支持屏幕边缘和多显示器；遵循系统“减少动画”偏好。
+
+## 其他功能
+
+可保存的设置包括桌面灯、系统通知、工作时防睡眠、登录启动、Claude 额度和刷新间隔。灰色代表未运行/暂停，蓝色代表待命，绿色代表工作/完成，红色代表审批，琥珀色代表输入/删除/读取异常；文字标签区分共享颜色的状态。
+
+暂停会忽略进行中扫描结果、释放防睡眠、不发送通知。活动记录保留本次启动后的最近 40 次状态变化。额度查询与扫描分开，失败不会阻塞本地状态刷新。
+
+## 配置与架构
+
+配置沿用 `%APPDATA%/agent-status-bar/config.json`。保留已有路径、凭据位置和额度接口配置。默认每次扫描结束后 3 秒开始下一次扫描，允许 2–60 秒；单次扫描最长 25 秒。
+
+`AGENT_BAR_CONFIG_DIR` 可指定独立测试配置目录。设置该变量时启动阶段不会改动真实登录启动项；在设置界面主动修改登录启动仍会调用 Windows 设置。
+
+核心模块：
+
+- `src/main/scanner/codexSessions.ts`：多会话发现、合并与状态判定。
+- `src/main/scanner/codexScanner.ts`：批量活动查询与会话元数据。
+- `src/main/scanner/codexRollout.ts`：任务生命周期和逐调用等待解析。
+- `src/main/monitor.ts`：调度、每会话活动记录与通知。
+- `src/main/desktopLight.ts`：悬停、拖动与原窗口展开/收起。
+- `resources/panel.*`、`resources/floating.*`：共享面板与转场。
+- `src/shared/status.ts`：共享状态语义和优先级。
+
+扫描在 worker thread 执行。渲染窗口关闭 Node 集成，启用 context isolation 与 sandbox；IPC 校验窗口及主 frame 来源，会话文本通过 textContent 渲染。
+
+## 验证与打包
+
+```powershell
+npm.cmd run typecheck
+npm.cmd test
+npm.cmd run test:ui
+npm.cmd run dist
 ```
 
-打包后的安装程序位于 `release/` 目录。Windows 用户可以下载 GitHub Releases 中的 NSIS 安装器（`AgentStatusBar Setup *.exe`），也可以直接运行便携版 EXE。
+目前包含 43 项逻辑回归测试、19 项界面检查、7 项完整入口检查。界面测试使用隔离配置，不发送真实通知、不请求额度、不修改真实登录启动项，会读取本机 Agent 状态。生成的截图使用明确标记的测试数据，保存在 `artifacts/`，不需要随应用保留。
 
-## 系统要求
+已有本地 Electron 运行时可这样构建便携版：
 
-- Windows 10/11
-- 已安装 [Claude Code](https://github.com/anthropic-ai/claude-code) 或 [OpenAI Codex](https://github.com/openai/codex)
-- Node.js 20+
-
-## 工作原理
-
-1. **进程枚举** — 通过 PowerShell (`Win32_Process`) 检测正在运行的 `claude.exe` 和 `codex.exe` 进程
-2. **Claude 扫描** — 读取 `~/.claude/sessions/` 下的会话 JSON 文件，并检查转录日志中的审批状态
-3. **Codex 扫描** — 查询 `~/.codex/logs_2.sqlite` 以从事件日志判断活动状态
-4. **积分查询** — 使用存储的访问令牌从 Anthropic OAuth API 获取使用数据
-5. **状态聚合** — 将两个代理的状态合并为统一状态，显示在托盘和桌面指示灯中
-
-## 配置
-
-设置保存在 `%APPDATA%\agent-status-bar\config.json`。主要选项：
-
-| 配置项 | 默认值 | 说明 |
-|--------|--------|------|
-| `scanIntervalSec` | 3 | 扫描代理状态的间隔（秒） |
-| `keepAwakeEnabled` | true | 代理忙碌时阻止系统睡眠 |
-| `openAtLogin` | true | Windows 登录时自动启动 |
-| `claudeBusyFreshnessMs` | 30000 | 会话更新多近才算忙碌（毫秒） |
-| `codexTurnActivityFreshnessMs` | 30000 | Codex 活动时间的相同阈值 |
-| `codexThreadLookupWindowSec` | 7200 | 查找 Codex 线程的时间范围（2小时） |
-| `credit.enabled` | true | 启用积分显示 |
-| `credit.endpoint` | Anthropic OAuth 地址 | 积分 API 端点 |
-| `light.enabled` | true | 显示桌面指示灯 |
-| `light.x`, `light.y` | 右上角 | 桌面指示灯位置（拖动后自动保存） |
-
-## 开发
-
-```bash
-# 类型检查
-npm run typecheck
-
-# 开发模式运行
-npm start
-
-# 编译 TypeScript
-npm run build
+```powershell
+npm.cmd run dist -- --win portable --x64 --config.electronDist=node_modules/electron/dist
 ```
 
-## 项目结构
+## 识别边界
 
-```
-src/
-├── shared/
-│   └── types.ts          # 共享数据模型
-├── main/
-│   ├── main.ts           # 应用入口
-│   ├── tray.ts           # 系统托盘图标和菜单
-│   ├── statusLight.ts    # 状态聚合逻辑
-│   ├── desktopLight.ts   # 桌面指示灯窗口
-│   ├── notifications.ts  # 系统通知
-│   ├── keepAwake.ts      # Windows 电源管理
-│   ├── config.ts         # 配置文件处理
-│   ├── watch.ts          # 无头守护模式
-│   └── scanner/
-│       ├── scanAll.ts    # 完整扫描编排器
-│       ├── processEnumerator.ts  # PowerShell 进程扫描
-│       ├── claudeScanner.ts      # Claude 会话分析
-│       ├── codexScanner.ts       # Codex 数据库查询
-│       └── creditScanner.ts      # API 积分追踪
-└── cli/
-    └── scanOnce.ts       # 一次性扫描（调试用）
-```
+这里监控的是本地可发现的会话记录，不是 Codex GUI 当前打开的标签页列表。已归档会话不计入监控。不同 `CODEX_HOME`、WSL 或其他用户目录需要相应配置，不会自动跨目录搜索。
 
-## 许可证
+状态仍基于日志和任务记录推断，没有修改 Codex，也没有接入官方事件订阅。每个 rollout 最多读取末尾 256 KiB；文件缺失、过大的单条日志、格式变化或无法关联到已退出的单个后台进程时，识别仍可能不完整。进程启动校验采用所有当前 Codex 进程中最早的启动时间，不代表已建立每个线程与 PID 的精确绑定。
 
-MIT
+轮询可能错过非常短的状态。Claude 缺少显式审批标记的版本无法可靠检测审批；删除提示不覆盖全部 shell 命令。额度和系统通知仍受登录状态、接口可用性及 Windows 设置影响。
+

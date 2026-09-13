@@ -1,37 +1,14 @@
-/** Keep the system awake while an agent is busy — Windows analog of `caffeinate`. */
+﻿import { powerSaveBlocker } from 'electron';
 
-const koffi = require('koffi');
-
-const ES_CONTINUOUS = 0x80000000;
-const ES_SYSTEM_REQUIRED = 0x00000001;
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let setThreadExecutionState: ((flags: number) => number) | null = null;
-let active = false;
-
-function getImpl(): ((flags: number) => number) | null {
-  if (setThreadExecutionState) return setThreadExecutionState;
-  try {
-    const lib = koffi.load('kernel32.dll');
-    setThreadExecutionState = lib.func('uint32 SetThreadExecutionState(uint32 esFlags)');
-  } catch {
-    setThreadExecutionState = null;
-  }
-  return setThreadExecutionState;
-}
-
+let blocker: number | null = null;
 export function isKeepAwakeActive(): boolean {
-  return active;
+  return blocker !== null && powerSaveBlocker.isStarted(blocker);
 }
-
 export function setKeepAwake(on: boolean): void {
-  const fn = getImpl();
-  if (!fn) return;
-  const flags = on ? ES_CONTINUOUS | ES_SYSTEM_REQUIRED : ES_CONTINUOUS;
-  try {
-    fn(flags);
-    active = on;
-  } catch {
-    /* ignore FFI errors */
+  if (on && !isKeepAwakeActive()) blocker = powerSaveBlocker.start('prevent-app-suspension');
+  if (!on && blocker !== null) {
+    powerSaveBlocker.stop(blocker);
+    blocker = null;
   }
 }
+

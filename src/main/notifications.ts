@@ -7,8 +7,8 @@ export type NotificationKind = 'busy' | 'waiting-for-approval' | 'waiting-for-in
 const COOLDOWN_MS = 60_000;
 const lastSent = new Map<string, number>();
 
-function keyOf(client: AgentClient, kind: NotificationKind): string {
-  return `${client}:${kind}`;
+export function notificationKey(client: AgentClient, kind: NotificationKind, sessionId?: string): string {
+  return `${client}:${sessionId ?? "process"}:${kind}`;
 }
 
 function electronNotification(): typeof import('electron').Notification | undefined {
@@ -26,10 +26,11 @@ export function notify(
   kind: NotificationKind,
   title: string,
   body: string,
-  iconPath?: string
+  iconPath?: string,
+  sessionId?: string
 ): boolean {
   const now = Date.now();
-  const key = keyOf(client, kind);
+  const key = notificationKey(client, kind, sessionId);
   const last = lastSent.get(key) ?? 0;
   if (now - last < COOLDOWN_MS) return false;
 
